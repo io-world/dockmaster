@@ -1,0 +1,194 @@
+// Page PNGs stacked vertically with boxes absolutely positioned over them.
+// Positions come from geometry.ts only; each page tracks its own rendered width with a ResizeObserver.
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Rnd } from "react-rnd";
+import type { BBox, Page } from "../api";
+import { bboxToPx, pageScale, pxToBbox, pxToPoint } from "../geometry";
+
+export interface PageClick {
+  page: number;
+  point: [number, number]; // PDF points
+  clientX: number;
+  clientY: number;
+}
+
+interface EditProps {
+  onBoxChange?: (id: string, bbox: BBox) => void; // makes boxes movable/resizable
+  addMode?: boolean;
+  onPageClick?: (c: PageClick) => void;
+}
+
+export interface PreviewBox {
+  id: string;
+  page: number;
+  bbox: BBox;
+  color: string;
+  dashed?: boolean;
+  label?: string;
+  title?: string;
+  muted?: boolean; // e.g. other signers' fields on the signing page
+  pulse?: boolean; // briefly animate (card -> box link)
+}
+
+function PageView({
+  page,
+  boxes,
+  highlighted,
+  onBoxClick,
+  renderBox,
+  onBoxChange,
+  addMode,
+  onPageClick,
+}: {
+  page: Page;
+  boxes: PreviewBox[];
+  highlighted: Set<string>;
+  onBoxClick?: (id: string) => void;
+  renderBox?: (box: PreviewBox, scale: number) => ReactNode;
+} & EditProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setScale(pageScale(page.width, el.clientWidth));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [page.width]);
+
+  const clickPage = (e: MouseEvent<HTMLDivElement>) => {
+    if (!addMode || !onPageClick || !ref.current || scale <= 0) return;
+    if ((e.target as HTMLElement).closest("[data-box-id]")) return;
+    const r = ref.current.getBoundingClientRect();
+    onPageClick({ page: page.n, point: pxToPoint(e.clientX - r.left, e.clientY - r.top, scale), clientX: e.clientX, clientY: e.clientY });
+  };
+
+  return (
+    <div
+      ref={ref}
+      data-page={page.n}
+      onClick={clickPage}
+      className={`relative w-full bg-white shadow ${addMode ? "cursor-crosshair" : ""}`}
+      style={{ aspectRatio: `${page.width} / ${page.height}` }} // reserves space before the image loads
+    >
+      {failed ? (
+        <div className="flex h-full items-center justify-center text-sm text-red-700">Couldn't load page {page.n}</div>
+      ) : (
+        <img
+          src={page.image_url}
+          alt={`Page ${page.n}`}
+          className="absolute inset-0 h-full w-full select-none"
+          draggable={false}
+          onError={() => setFailed(true)}
+        />
+      )}
+      {scale > 0 &&
+        boxes.map((b) => {
+          if (renderBox) return renderBox(b, scale);
+          const r = bboxToPx(b.bbox, scale);
+          const hi = highlighted.has(b.id);
+          const style = {
+            border: `${hi ? 3 : 2}px ${b.dashed ? "dashed" : "solid"} ${b.color}`,
+            background: b.muted ? "rgba(148,163,184,0.15)" : `${b.color}14`,
+            opacity: b.muted ? 0.5 : 1,
+            boxShadow: hi ? `0 0 0 3px ${b.color}55` : undefined,
+          };
+          const tag = b.label && (
+            <span
+              className="pointer-events-none absolute -top-3.5 left-0 whitespace-nowrap rounded-sm px-0.5 text-[9px] leading-[14px] text-white"
+              style={{ background: b.color }}
+            >
+              {b.label}
+            </span>
+          );
+          if (onBoxChange) {
+            // Editable: drag to move, handles to resize. Selection uses a normal click (also fires after a drag,
+            // which simply selects the box that was moved).
+            return (
+              <Rnd
+                key={b.id}
+                bounds="parent"
+                size={{ width: r.width, height: r.height }}
+                position={{ x: r.left, y: r.top }}
+                minWidth={6}
+                minHeight={6}
+                className={`${hi ? "z-10" : ""} ${b.pulse ? "box-pulse" : ""}`}
+                style={style}
+                onDragStop={(_e, d) => {
+                  if (Math.abs(d.x - r.left) >= 1 || Math.abs(d.y - r.top) >= 1)
+                    onBoxChange(b.id, pxToBbox({ left: d.x, top: d.y, width: r.width, height: r.height }, scale, page));
+                }}
+                onResizeStop={(_e, _dir, el, _delta, pos) =>
+                  onBoxChange(b.id, pxToBbox({ left: pos.x, top: pos.y, width: el.offsetWidth, height: el.offsetHeight }, scale, page))
+                }
+              >
+                <div data-box-id={b.id} title={b.title} className="h-full w-full cursor-move" onClick={() => onBoxClick?.(b.id)}>
+                  {tag}
+                </div>
+              </Rnd>
+            );
+          }
+          return (
+            <div
+              key={b.id}
+              data-box-id={b.id}
+              title={b.title}
+              onClick={onBoxClick ? () => onBoxClick(b.id) : undefined}
+              className={`absolute ${onBoxClick ? "cursor-pointer" : ""} ${hi ? "z-10" : ""} ${b.pulse ? "box-pulse" : ""}`}
+              style={{ left: r.left, top: r.top, width: r.width, height: r.height, ...style }}
+            >
+              {b.label && (
+                <span
+                  className="pointer-events-none absolute -top-3.5 left-0 whitespace-nowrap rounded-sm px-0.5 text-[9px] leading-[14px] text-white"
+                  style={{ background: b.color }}
+                >
+                  {b.label}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      <span className="absolute -left-1 top-1 -translate-x-full text-xs text-gray-400">{page.n}</span>
+    </div>
+  );
+}
+
+export default function PdfPreview({
+  pages,
+  boxes,
+  highlighted = new Set(),
+  onBoxClick,
+  renderBox,
+  onBoxChange,
+  addMode,
+  onPageClick,
+}: {
+  pages: Page[];
+  boxes: PreviewBox[];
+  highlighted?: Set<string>;
+  onBoxClick?: (id: string) => void;
+  renderBox?: (box: PreviewBox, scale: number) => ReactNode;
+} & EditProps) {
+  if (pages.length === 0) return <p className="text-sm text-gray-600">This document has no pages to show.</p>;
+  return (
+    <div className="space-y-4 pl-6">
+      {pages.map((p) => (
+        <PageView
+          key={p.n}
+          page={p}
+          boxes={boxes.filter((b) => b.page === p.n)}
+          highlighted={highlighted}
+          onBoxClick={onBoxClick}
+          renderBox={renderBox}
+          onBoxChange={onBoxChange}
+          addMode={addMode}
+          onPageClick={onPageClick}
+        />
+      ))}
+    </div>
+  );
+}

@@ -1,0 +1,12 @@
+.git
+.venv
+.env
+**/__pycache__
+*.docx
+.DS_Store
+frontend/node_modules
+frontend/dist
+backend/data
+backend/out
+backend/test_pdfs
+backend/scripts

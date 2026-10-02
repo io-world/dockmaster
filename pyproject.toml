@@ -1,0 +1,26 @@
+[project]
+name = "dockmaster"
+version = "0.1.0"
+description = "AI-first e-signature: Claude proposes signers and fields from an uploaded PDF"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=1.11.0",
+    "fastapi>=0.142.2",
+    "numpy>=2.5.3",
+    "onnxruntime>=1.30.0",
+    "opencv-python-headless>=5.0.0.93",
+    "pydantic>=2.13.5",
+    "pymupdf>=1.28.2",
+    "python-dotenv>=1.2.4",
+    "python-multipart>=0.0.32",
+    "rapidocr>=3.9.2",
+    "sqlmodel>=0.0.47",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "nodeenv>=1.11.0",
+    "playwright>=1.63.0",
+]
