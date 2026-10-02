@@ -111,7 +111,23 @@ export default function ReviewPage({ id }: { id: number }) {
   const [env, setEnv] = useState<EnvelopeDetail | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  // AI summary panel: expandable/minimisable (never dismissed). The choice is remembered per browser.
+  const [summaryOpen, setSummaryOpen] = useState(() => {
+    try {
+      return localStorage.getItem("dm.summaryOpen") !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const toggleSummary = () =>
+    setSummaryOpen((o) => {
+      try {
+        localStorage.setItem("dm.summaryOpen", String(!o));
+      } catch {
+        /* storage unavailable: just don't remember */
+      }
+      return !o;
+    });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeSignerId, setActiveSignerId] = useState<string | null>(null);
   const [pulseId, setPulseId] = useState<string | null>(null);
@@ -346,17 +362,37 @@ export default function ReviewPage({ id }: { id: number }) {
             <ErrorBox message={sendError.message} problems={sendError.problems} />
           </div>
         )}
-        {env.summary && <div className="border-b bg-white px-4 py-1.5 text-sm text-gray-700">{env.summary}</div>}
-        {!dismissed && env.warnings.length > 0 && (
-          <div className="flex items-start gap-3 border-b bg-amber-50 px-4 py-2 text-sm text-amber-900">
-            <ul className="list-disc space-y-0.5 pl-5">
-              {env.warnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-            <button className="ml-auto shrink-0 underline" onClick={() => setDismissed(true)}>
-              Dismiss
+        {(env.summary || env.warnings.length > 0) && (
+          <div data-testid="ai-summary" className={`border-b text-sm ${env.warnings.length ? "bg-amber-50 text-amber-950" : "bg-white text-gray-700"}`}>
+            <button
+              data-testid="ai-summary-toggle"
+              onClick={toggleSummary}
+              aria-expanded={summaryOpen}
+              className="flex w-full items-center gap-2 px-4 py-1.5 text-left"
+            >
+              <span className="w-4 shrink-0 text-gray-500">{summaryOpen ? "▾" : "▸"}</span>
+              <span className="shrink-0 font-medium">AI summary</span>
+              {env.warnings.length > 0 && (
+                <span className="shrink-0 rounded bg-amber-200 px-1.5 text-xs text-amber-900">
+                  {env.warnings.length} note{env.warnings.length === 1 ? "" : "s"}
+                </span>
+              )}
+              {/* Minimised: the one-line summary stays visible. */}
+              {!summaryOpen && env.summary && <span className="min-w-0 truncate text-gray-700">{env.summary}</span>}
+              <span className="ml-auto shrink-0 text-xs text-gray-500 underline">{summaryOpen ? "Minimise" : "Expand"}</span>
             </button>
+            {summaryOpen && (
+              <div className="max-h-48 overflow-y-auto px-4 pb-2 pl-10">
+                {env.summary && <p className="mb-1 text-gray-800">{env.summary}</p>}
+                {env.warnings.length > 0 && (
+                  <ul className="list-disc space-y-0.5 pl-5 text-amber-900">
+                    {env.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         )}
         <div className="flex min-h-0 flex-1">

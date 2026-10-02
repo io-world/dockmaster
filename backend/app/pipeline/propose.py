@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -125,6 +126,8 @@ when the label clearly asks for a value next to it.
 a real line inside a table cell. Decide from the labels.
 3. List in `missing_fields` any signature, initials or date you expect but that no candidate covers.
 4. Be honest with confidence: below 0.6 when you are guessing. Never invent candidate IDs.
+5. `warnings`, `missing_fields` descriptions and `reason`s are shown to the sender, who never sees candidate IDs: \
+refer to page numbers and labels (e.g. "the Date: line on page 17"), never to IDs like c12.
 
 The page images show every candidate as a red box labelled with its ID. Scanned pages have no text layer: \
 their candidates come with empty labels and their document text is blank, so read the labels, headings and \
@@ -213,28 +216,54 @@ def _cost(model: str, usage) -> float:
             + usage.output_tokens * pout) / 1_000_000
 
 
+def _describe(c: Candidate) -> str:
+    """How a candidate is named in text the sender reads (they never see IDs like c12)."""
+    label = (c.left_label or c.above_label or c.below_label).strip()
+    return f"the blank on page {c.page}" + (f" next to “{label[:40]}”" if label else "")
+
+
+_CAND_ID = re.compile(r"\(?\b(c\d+)\b\)?")
+
+
+def _humanize_ids(ex: Extraction, cp: ClaudeProposal) -> None:
+    """Replace any candidate IDs left in Claude's sender-facing text with plain descriptions."""
+    cands = {c.id: c for c in ex.candidates}
+
+    def fix(text: str) -> str:
+        return _CAND_ID.sub(lambda m: _describe(cands[m.group(1)]) if m.group(1) in cands else m.group(0), text)
+
+    cp.warnings = [fix(w) for w in cp.warnings]
+    for m in cp.missing_fields:
+        m.description = fix(m.description)
+    for f in cp.fields:
+        f.reason = fix(f.reason)
+    for r in cp.rejected:
+        r.reason = fix(r.reason)
+
+
 def _validate(ex: Extraction, cp: ClaudeProposal) -> list[str]:
     """Make the output internally consistent; every fix becomes a visible warning."""
     warnings: list[str] = []
     cand_ids = {c.id for c in ex.candidates}
+    by_id = {c.id: c for c in ex.candidates}
     party_ids = {p.id for p in cp.parties}
     signer_ids = {s.id for s in cp.signers}
 
     for s in list(cp.signers):
         if s.party_id not in party_ids:
-            warnings.append(f"Signer '{s.label}' referenced unknown party {s.party_id}")
+            warnings.append(f"Signer '{s.label}' isn't linked to any party in the document")
 
     seen: set[str] = set()
     kept_fields = []
     for f in cp.fields:
         if f.candidate_id not in cand_ids:
-            warnings.append(f"AI referenced unknown candidate {f.candidate_id}; ignored")
+            warnings.append("The AI referred to a blank that doesn't exist; that suggestion was ignored")
             continue
         if f.candidate_id in seen:
-            warnings.append(f"AI classified {f.candidate_id} twice; kept the first")
+            warnings.append(f"The AI classified {_describe(by_id[f.candidate_id])} twice; the first answer was kept")
             continue
         if f.signer_id is not None and f.signer_id not in signer_ids:
-            warnings.append(f"Field {f.candidate_id} pointed to unknown signer {f.signer_id}; left unassigned")
+            warnings.append(f"The AI assigned {_describe(by_id[f.candidate_id])} to a signer that doesn't exist; it's left for you to assign")
             f.signer_id, f.confidence = None, min(f.confidence, 0.3)
         if f.filled_by == "signer" and f.signer_id is None:
             f.confidence = min(f.confidence, 0.3)
@@ -251,7 +280,7 @@ def _validate(ex: Extraction, cp: ClaudeProposal) -> list[str]:
                 candidate_id=c.id, signer_id=None, filled_by="signer", type="text",
                 label=c.left_label or c.above_label or "", description="Unclassified blank",
                 required=False, confidence=0.0, reason="Not classified by AI"))
-            warnings.append(f"AI did not classify {c.id}; added as an unassigned field")
+            warnings.append(f"The AI didn't classify {_describe(c)}; it's in Needs review for you to decide")
 
     signers_with_fields = {f.signer_id for f in cp.fields}
     for s in cp.signers:
@@ -302,6 +331,7 @@ def propose(ex: Extraction, model: str = MODEL, debug_dir: str | Path | None = N
         raise RuntimeError(f"Claude returned no proposal (stop_reason={response.stop_reason})")
 
     cp: ClaudeProposal = response.parsed_output
+    _humanize_ids(ex, cp)
     warnings = _validate(ex, cp)
     return {"proposal": cp.model_dump(), "warnings": warnings, "meta": meta}
 

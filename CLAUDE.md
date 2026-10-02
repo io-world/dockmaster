@@ -22,6 +22,8 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
 - Session 2 (2026-10-03): nav "Envelopes" renamed to "Inbox"; delete documents from the Inbox (with confirmation).
   Review board is now vertical collapsible sections + a sticky drop bar (chips), with auto-scroll off and a "Move to…"
   menu on cards. Thin-box resize-handle bug fixed. Full journey re-verified.
+  Warnings banner replaced by an expandable/minimisable "AI summary" panel (summary + notes; never dismissed).
+  AI notes now refer to pages/labels instead of candidate IDs.
 - Step 7: full journey passes against the production Docker container (`backend/scripts/e2e_journey.py`).
 - `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
 - README.md and AI_TOOLING_NOTES.md drafted.
