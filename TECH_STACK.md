@@ -56,6 +56,7 @@ receives has every candidate blank drawn as a red box labelled with its ID (`pro
 | @dnd-kit/core | 6.3.1 | Dragging cards between review columns (sortable removed: cards are ordered by page position) | [clauderic/dnd-kit](https://github.com/clauderic/dnd-kit) | MIT |
 | react-rnd | 10.5.3 | Moving and resizing field boxes on the page preview | [bokuweb/react-rnd](https://github.com/bokuweb/react-rnd) | MIT |
 | signature_pad | 5.1.4 | Drawing signatures | [szimek/signature_pad](https://github.com/szimek/signature_pad) | MIT |
+| Dancing Script (Google Fonts) | n/a | Script font for typed signatures, loaded at runtime from fonts.googleapis.com; falls back to a system cursive font if unavailable | [google/fonts](https://github.com/google/fonts) | OFL-1.1 |
 
 ### Dev-only tools (not in the Docker image)
 

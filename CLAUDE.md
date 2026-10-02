@@ -11,6 +11,48 @@ corrects the proposal instead of building it from scratch.
 - Build for the general case. Never tune to specific test PDFs.
 - Effort cap: 10–15 hours. Prefer six things working over eleven half-built.
 
+## Current status (handoff — updated 2026-10-02, end of session 1)
+Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libraries in `TECH_STACK.md`.
+
+**Done and verified**
+- Pipeline: extract → propose → place → stamp. Handles rotated, scanned (via marked images; no OCR engine) and mixed page sizes.
+- Backend API (`backend/app/api.py`, see the API section below), auth, outbox, stamping, AI-failure fallback.
+- Frontend steps 1–6 (auth, envelopes, review board with DnD/boxes/add field/autosave/checklist/send, signing,
+  status, outbox).
+- Step 7: full journey passes against the production Docker container (`backend/scripts/e2e_journey.py`).
+- `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
+- README.md and AI_TOOLING_NOTES.md drafted.
+- Public repo https://github.com/io-world/dockmaster, one commit. Repo-local git author is set to the io-world
+  noreply address.
+
+**Open items (in priority order)**
+1. **Purge old commit `0a2060a` from GitHub.** It's still reachable by SHA after the force-push. It contains only the
+   machine-default author line (first name + hostname) and 2 DECISIONS lines naming document types (no PDFs).
+   Needs the repo deleted and recreated: the user runs `gh auth refresh -h github.com -s delete_repo` (or deletes it in
+   the web UI), then recreate `io-world/dockmaster` (public) and push. Waiting on the user.
+2. **Deploy** to a host with a persistent volume (`/data`) and `ANTHROPIC_API_KEY` set. The host isn't chosen yet.
+   The image works (`docker run … --env-file .env`); it's 1.83 GB (slimming optional).
+3. **Unseen-PDF drill:** someone else picks documents and uses the app cold. Fix what breaks.
+4. **Commit and push** today's docs (README, AI_TOOLING_NOTES, CLAUDE.md status, DECISIONS, TECH_STACK). Not committed
+   yet; ask the user first.
+5. **AI_TOOLING_NOTES.md:** the user adds their own reflections (marked "To finish (owner)").
+6. **5-minute recording.** Stop adding features by Sunday 4 Oct midday.
+7. Nice-to-haves if time allows: more varied labelled test PDFs (offer letter, 3-party agreement, existing form fields).
+
+**Known gaps (accepted, logged in DECISIONS):** no radio buttons; `FORMCHECKBOX` field-code checkboxes are
+undetectable; label-only blanks on scans; the AI varies between runs on the lease (landlord alternative blocks);
+two PDFs with the same filename share an output folder in the test scripts.
+
+**Privacy rules (user's explicit requirement):**
+- Never commit or publish `backend/test_pdfs/*.pdf`, `*.labels.json`, `*.docx` or `.env` (all gitignored).
+- Never name the user, their employer or the personal document types in committed files.
+- Re-audit a fresh clone of GitHub before and after every push.
+
+**How to resume:** start the backend and frontend (Running section at the end of this file). For UI checks,
+Playwright with Chromium is in `.venv` (`PLAYWRIGHT_BROWSERS_PATH=.venv/playwright-browsers`). Run automated UI tests
+on other ports (backend :8001, frontend :5174 with `DOCKMASTER_API`) so they never touch the user's running servers
+or `backend/data`.
+
 ## Scoring (guides every tradeoff)
 | Weight | Criterion |
 |---|---|
@@ -33,7 +75,7 @@ Not scored: visual polish, tests/CI, security hardening, legal compliance, scale
 - PyMuPDF (AGPL — fine for this project; note commercial licensing in README).
 - Scans: no OCR engine. `opencv-python-headless` finds lines; Claude reads labels from page images on which every candidate is drawn as a red box + ID. PyMuPDF `get_textpage_ocr()` is used only if Tesseract happens to be installed (optional).
 - LLM: Anthropic API. Start with `claude-sonnet-5-5`; evaluate `claude-haiku-4-5-20251001` on the labeled test set for cost.
-- Frontend: React + Vite + Tailwind (tentative; decided later). `react-rnd` for drag/resize, `signature_pad` for signatures.
+- Frontend: React + Vite + TypeScript + Tailwind (decided and built). `@dnd-kit/core` for drag between columns, `react-rnd` for box move/resize, `signature_pad` for signatures. No router library or state library.
 - Deploy: single Docker container (multi-stage: Node builds frontend, FastAPI serves it). Host must have a persistent volume.
 
 ## Repo layout
