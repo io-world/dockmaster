@@ -79,7 +79,7 @@ function PageView({
       ref={ref}
       data-page={page.n}
       onClick={clickPage}
-      className={`relative w-full bg-white shadow ${addMode ? "cursor-crosshair" : ""}`}
+      className={`relative w-full scroll-mt-16 bg-white shadow ${addMode ? "cursor-crosshair" : ""}`}
       style={{ aspectRatio: `${page.width} / ${page.height}` }} // reserves space before the image loads
     >
       {failed ? (

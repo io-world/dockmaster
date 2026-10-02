@@ -26,6 +26,7 @@ from .auth import EMAIL_RE, current_user
 from .db import envelope_dir, get_session, init_db
 from .models import Envelope, FieldRow, OutboxEmail, Signer, User, now
 from .outbox import notify
+from .pipeline.ask import AskError, answer
 from .pipeline.extract import extract
 from .pipeline.place import fallback_proposal, place
 from .pipeline.propose import propose
@@ -482,6 +483,56 @@ def signing_final(token: str, db: Session = Depends(get_session)):
     if not env.final_pdf_path:
         raise HTTPException(404, "The signed PDF is available once everyone has signed")
     return FileResponse(env.final_pdf_path, media_type="application/pdf", filename=_signed_name(env.filename))
+
+
+# ---------- questions about the document (sender and signers; history lives in the client) ----------
+
+
+class AskIn(BaseModel):
+    question: str
+    history: list[dict] = []
+
+
+def _field_line(f: FieldRow) -> str:
+    return f"- {f.type} '{f.label or f.description or 'field'}' on page {f.page}" + ("" if f.required else " (optional)")
+
+
+def _sender_context(db: Session, env: Envelope) -> str:
+    signers, fields = _signers(db, env.id), _fields(db, env.id)
+    lines = [f"The person asking is the sender, preparing '{env.filename}' (status: {env.status}). Current setup:"]
+    for s in signers:
+        lines.append(f"Signer '{s.name or s.label}' ({s.role or 'no role'}) fills:")
+        lines += [_field_line(f) for f in fields if f.signer_key == s.key] or ["- (no fields)"]
+    sender = [f for f in fields if f.filled_by == "sender"]
+    if sender:
+        lines.append("The sender fills before sending:")
+        lines += [_field_line(f) for f in sender]
+    return "\n".join(lines)
+
+
+def _signer_context(db: Session, env: Envelope, s: Signer) -> str:
+    mine = [f for f in _fields(db, env.id) if f.signer_key == s.key]
+    return "\n".join([f"The person asking is a signer: {s.name or s.label} ({s.role or s.label}). They are asked to fill:",
+                      *([_field_line(f) for f in mine] or ["- (no fields)"])])
+
+
+def _ask(env: Envelope, body: AskIn, context: str) -> dict:
+    try:
+        return answer(env.pdf_path, envelope_dir(env.id) / "pages", body.question, body.history, context)
+    except AskError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/envelopes/{envelope_id}/ask")
+def ask_envelope(envelope_id: int, body: AskIn, user: User = Depends(current_user), db: Session = Depends(get_session)):
+    env = _own_envelope(db, envelope_id, user)
+    return _ask(env, body, _sender_context(db, env))
+
+
+@app.post("/api/sign/{token}/ask")
+def ask_signing(token: str, body: AskIn, db: Session = Depends(get_session)):
+    s, env = _by_token(db, token)
+    return _ask(env, body, _signer_context(db, env, s))
 
 
 # ---------- outbox ----------

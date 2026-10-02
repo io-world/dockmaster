@@ -20,6 +20,7 @@ cd frontend && uv run npm install && cd ..       # first time: frontend deps
 uv run uvicorn app.api:app --app-dir backend --reload     # API on :8000
 cd frontend && uv run npm run dev                         # app on :5173 (proxies /api to :8000)
 ```
+The dev server also listens on your network, so you can test on a phone at `http://<your computer's IP>:5173`.
 
 **Walk the whole journey without email:** sign up → upload (from the **Inbox**) → review → Send → open **Outbox** → click a blue
 "Open signing page as this recipient" button → sign → repeat for each signer → download from the document's Status page.
@@ -44,6 +45,7 @@ cd frontend && uv run npm run dev                         # app on :5173 (proxie
   - only your own fields are active, with "Next field";
   - draw a signature, or type your name in a script font;
   - dates are prefilled.
+- **Ask about the document:** the sender (in Review) and each signer (on their signing page) can ask questions. Answers come only from the document, with clickable page references. They aren't legal advice, and the conversation isn't stored.
 - **Completion:** signatures and values are stamped into the PDF; status and outbox notifications are kept; the signed PDF downloads.
 - **Inbox:** every document with its status and "1 of 2 signed"; delete a document (with confirmation; signing links for sent documents stop working).
 - **Failures stay visible:**

@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
+    // Listen on all network interfaces (not just localhost) so phones/other machines on the LAN can open the app.
+    // The backend can stay on localhost: Vite forwards /api to it from this machine.
+    host: true,
+    // Also accept "<computer-name>.local" addresses (IP addresses are always accepted).
+    allowedHosts: [".local"],
     // DOCKMASTER_API lets a second backend (e.g. an automated test on another port) be used.
     proxy: { "/api": { target: process.env.DOCKMASTER_API ?? "http://127.0.0.1:8000", changeOrigin: false } },
   },

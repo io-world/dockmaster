@@ -1,6 +1,7 @@
 // Public signing page (/sign/:token). No account: the link token is the credential.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type Field, type SigningView } from "../api";
+import DocChat from "../components/DocChat";
 import PdfPreview, { type PreviewBox } from "../components/PdfPreview";
 import SignatureModal from "../components/SignatureModal";
 import { ErrorBox, Spinner } from "../components/ui";
@@ -34,6 +35,7 @@ export default function SignPage({ token }: { token: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<{ message: string; problems: string[] } | null>(null);
   const [done, setDone] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
@@ -229,6 +231,28 @@ export default function SignPage({ token }: { token: string }) {
             <ErrorBox message={submitError.message} problems={submitError.problems} />
           </div>
         )}
+        <div className="border-t bg-blue-50/60">
+          <div className="mx-auto max-w-5xl px-4">
+            <button
+              data-testid="signer-chat-toggle"
+              onClick={() => setChatOpen((o) => !o)}
+              aria-expanded={chatOpen}
+              className="flex w-full items-center gap-2 py-1.5 text-left text-sm"
+            >
+              <span className="w-4 text-gray-500">{chatOpen ? "▾" : "▸"}</span>
+              <span className="font-medium text-blue-900">Questions about this document?</span>
+              <span className="text-xs text-gray-600">Ask the AI. It answers from the document only.</span>
+            </button>
+            {/* Kept mounted when collapsed so the conversation survives. */}
+            <div className={chatOpen ? "pb-2" : "hidden"}>
+              <DocChat
+                ask={(q, h) => api.askSigning(token, q, h)}
+                starters={["What am I agreeing to?", "What are my obligations?", "Key dates or deadlines?"]}
+                onPage={(n) => scroller.current?.querySelector(`[data-page="${n}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              />
+            </div>
+          </div>
+        </div>
       </header>
       <div ref={scroller} className="flex-1 overflow-y-auto bg-gray-100 p-4">
         <div className="mx-auto max-w-3xl">

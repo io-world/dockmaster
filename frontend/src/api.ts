@@ -112,6 +112,16 @@ export interface Draft {
   rejected: Rejected[];
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AskResult {
+  answer: string;
+  meta: { model: string; cost_usd: number; duration_ms: number };
+}
+
 export interface SendResult {
   status: EnvelopeStatus;
   self_sign_token: string | null;
@@ -239,9 +249,13 @@ export const api = {
   send: (id: number) => request<SendResult>("POST", `/api/envelopes/${id}/send`),
   getStatus: (id: number) => request<EnvelopeStatusView>("GET", `/api/envelopes/${id}/status`),
   outbox: () => request<OutboxEntry[]>("GET", "/api/outbox"),
+  askEnvelope: (id: number, question: string, history: ChatMessage[]) =>
+    request<AskResult>("POST", `/api/envelopes/${id}/ask`, { question, history }),
 
   // ---------- signing (no login; token is the credential) ----------
   getSigning: (token: string) => request<SigningView>("GET", `/api/sign/${token}`, undefined, { auth: false }),
+  askSigning: (token: string, question: string, history: ChatMessage[]) =>
+    request<AskResult>("POST", `/api/sign/${token}/ask`, { question, history }, { auth: false }),
   submitSigning: (token: string, values: Record<string, string | null>) =>
     request<{ status: string; envelope_status: EnvelopeStatus }>("POST", `/api/sign/${token}`, { values }, { auth: false }),
 };

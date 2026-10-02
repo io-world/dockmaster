@@ -24,6 +24,7 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
   menu on cards. Thin-box resize-handle bug fixed. Full journey re-verified.
   Warnings banner replaced by an expandable/minimisable "AI summary" panel (summary + notes; never dismissed).
   AI notes now refer to pages/labels instead of candidate IDs.
+  Ask-the-document chat for the sender (Review panel) and signers (signing page); page links; prompt-cached; history not stored.
 - Step 7: full journey passes against the production Docker container (`backend/scripts/e2e_journey.py`).
 - `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
 - README.md and AI_TOOLING_NOTES.md drafted.
@@ -182,6 +183,7 @@ GET  /api/envelopes/{id}/final.pdf
 GET  /api/sign/{token}                          envelope, signer, can_sign, pages, fields (mine), others, prefilled
 GET  /api/sign/{token}/pages/{n}.png            POST /api/sign/{token} {values:{field_id: value}}
 GET  /api/sign/{token}/final.pdf                GET /api/outbox
+POST /api/envelopes/{id}/ask  |  POST /api/sign/{token}/ask   {question, history} -> {answer, meta}; doc-grounded Q&A, no storage
 ```
 Field values: text/date as text; checkbox "true"/"false"; signature/initials as a PNG data URL (transparent background).
 Field types: signature | initials | date | text | checkbox (radio cut). `filled_by: sender` fields are filled in Review.
@@ -219,6 +221,7 @@ Outbox entries are clickable and contain the real signing link (no real email de
 
 ## Running
 - Frontend dev (second terminal): `cd frontend && uv run npm run dev` → http://localhost:5173 (proxies `/api` to :8000).
+  Vite listens on the LAN too (`server.host: true`): open `http://<this Mac's IP>:5173` or `http://<name>.local:5173` from a phone. The backend can stay on localhost.
   First time: `cd frontend && uv run npm install`. Node lives in `.venv` (nodeenv); always run npm through `uv run`.
 - Production: `docker build -t dockmaster . && docker run -p 8000:8000 -v dockmaster_data:/data --env-file .env dockmaster`.
 - End-to-end check: `PLAYWRIGHT_BROWSERS_PATH=.venv/playwright-browsers uv run python backend/scripts/e2e_journey.py <url> <pdf> <outdir>` (fresh data volume; one AI call).

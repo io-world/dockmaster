@@ -3,6 +3,7 @@ import { api, ApiError, type Draft, type EnvelopeDetail, type FieldType } from "
 import Layout from "../components/Layout";
 import PdfPreview, { type PageClick, type PreviewBox } from "../components/PdfPreview";
 import { ConfirmDialog, ErrorBox, Spinner } from "../components/ui";
+import DocChat from "../components/DocChat";
 import Board from "../review/Board";
 import { checklist, type Checklist } from "../review/checklist";
 import { addField, DEFAULT_SIZE, moveFieldBox, newFieldId, SENDER_TARGET, type DraftUpdate } from "../review/draft";
@@ -285,6 +286,10 @@ export default function ReviewPage({ id }: { id: number }) {
     setReveal((r) => ({ fieldId, nonce: (r?.nonce ?? 0) + 1 }));
   };
 
+  // Page reference in a chat answer -> scroll the preview to that page.
+  const showPage = (n: number) =>
+    previewRef.current?.querySelector(`[data-page="${n}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
   // Column header -> highlight all of that signer's boxes.
   const selectSigner = (signerId: string) => {
     setSelectedId(null);
@@ -371,7 +376,7 @@ export default function ReviewPage({ id }: { id: number }) {
               className="flex w-full items-center gap-2 px-4 py-1.5 text-left"
             >
               <span className="w-4 shrink-0 text-gray-500">{summaryOpen ? "▾" : "▸"}</span>
-              <span className="shrink-0 font-medium">AI summary</span>
+              <span className="shrink-0 font-medium">AI summary &amp; questions</span>
               {env.warnings.length > 0 && (
                 <span className="shrink-0 rounded bg-amber-200 px-1.5 text-xs text-amber-900">
                   {env.warnings.length} note{env.warnings.length === 1 ? "" : "s"}
@@ -379,10 +384,12 @@ export default function ReviewPage({ id }: { id: number }) {
               )}
               {/* Minimised: the one-line summary stays visible. */}
               {!summaryOpen && env.summary && <span className="min-w-0 truncate text-gray-700">{env.summary}</span>}
+              {!summaryOpen && <span className="shrink-0 text-xs text-blue-700">Ask a question</span>}
               <span className="ml-auto shrink-0 text-xs text-gray-500 underline">{summaryOpen ? "Minimise" : "Expand"}</span>
             </button>
-            {summaryOpen && (
-              <div className="max-h-48 overflow-y-auto px-4 pb-2 pl-10">
+            {/* Kept mounted when minimised so the chat conversation survives. */}
+            <div className={summaryOpen ? "pb-2 pl-10 pr-4" : "hidden"}>
+              <div className="max-h-40 overflow-y-auto">
                 {env.summary && <p className="mb-1 text-gray-800">{env.summary}</p>}
                 {env.warnings.length > 0 && (
                   <ul className="list-disc space-y-0.5 pl-5 text-amber-900">
@@ -392,7 +399,14 @@ export default function ReviewPage({ id }: { id: number }) {
                   </ul>
                 )}
               </div>
-            )}
+              <div className="mt-2 border-t border-amber-200/70 pt-2">
+                <DocChat
+                  ask={(q, h) => api.askEnvelope(id, q, h)}
+                  starters={["Who needs to sign?", "Summarise the key terms", "Any deadlines or dates?"]}
+                  onPage={showPage}
+                />
+              </div>
+            </div>
           </div>
         )}
         <div className="flex min-h-0 flex-1">
