@@ -22,22 +22,16 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
 - Step 7: full journey passes against the production Docker container (`backend/scripts/e2e_journey.py`).
 - `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
 - README.md and AI_TOOLING_NOTES.md drafted.
-- Public repo https://github.com/io-world/dockmaster, one commit. Repo-local git author is set to the io-world
-  noreply address.
+- Public repo https://github.com/io-world/dockmaster: clean history (old commit purged by deleting and recreating the
+  repo on 2026-10-02), all docs committed. Repo-local git author is set to the io-world noreply address.
 
 **Open items (in priority order)**
-1. **Purge old commit `0a2060a` from GitHub.** It's still reachable by SHA after the force-push. It contains only the
-   machine-default author line (first name + hostname) and 2 DECISIONS lines naming document types (no PDFs).
-   Needs the repo deleted and recreated: the user runs `gh auth refresh -h github.com -s delete_repo` (or deletes it in
-   the web UI), then recreate `io-world/dockmaster` (public) and push. Waiting on the user.
-2. **Deploy** to a host with a persistent volume (`/data`) and `ANTHROPIC_API_KEY` set. The host isn't chosen yet.
+1. **Deploy** to a host with a persistent volume (`/data`) and `ANTHROPIC_API_KEY` set. The host isn't chosen yet.
    The image works (`docker run … --env-file .env`); it's 1.83 GB (slimming optional).
-3. **Unseen-PDF drill:** someone else picks documents and uses the app cold. Fix what breaks.
-4. **Commit and push** today's docs (README, AI_TOOLING_NOTES, CLAUDE.md status, DECISIONS, TECH_STACK). Not committed
-   yet; ask the user first.
-5. **AI_TOOLING_NOTES.md:** the user adds their own reflections (marked "To finish (owner)").
-6. **5-minute recording.** Stop adding features by Sunday 4 Oct midday.
-7. Nice-to-haves if time allows: more varied labelled test PDFs (offer letter, 3-party agreement, existing form fields).
+2. **Unseen-PDF drill:** someone else picks documents and uses the app cold. Fix what breaks.
+3. **AI_TOOLING_NOTES.md:** the user adds their own reflections (marked "To finish (owner)").
+4. **5-minute recording.** Stop adding features by Sunday 4 Oct midday.
+5. Nice-to-haves if time allows: more varied labelled test PDFs (offer letter, 3-party agreement, existing form fields).
 
 **Known gaps (accepted, logged in DECISIONS):** no radio buttons; `FORMCHECKBOX` field-code checkboxes are
 undetectable; label-only blanks on scans; the AI varies between runs on the lease (landlord alternative blocks);
