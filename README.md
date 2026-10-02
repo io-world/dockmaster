@@ -21,8 +21,8 @@ uv run uvicorn app.api:app --app-dir backend --reload     # API on :8000
 cd frontend && uv run npm run dev                         # app on :5173 (proxies /api to :8000)
 ```
 
-**Walk the whole journey without email:** sign up → upload → review → Send → open **Outbox** → click a blue
-"Open signing page as this recipient" button → sign → repeat for each signer → download from the envelope's Status page.
+**Walk the whole journey without email:** sign up → upload (from the **Inbox**) → review → Send → open **Outbox** → click a blue
+"Open signing page as this recipient" button → sign → repeat for each signer → download from the document's Status page.
 
 ## What works
 - **Upload any PDF:** digital, scanned, rotated, or with mixed page sizes (Letter, A4, Legal, landscape).
@@ -33,8 +33,8 @@ cd frontend && uv run npm run dev                         # app on :5173 (proxie
   - blanks that are **not** fields (table borders, underlined headings), each with a reason;
   - fields it expected but couldn't find.
 - **Review screen:**
-  - columns for **Needs review** (low confidence, guessed position, or no signer), **You fill**, one per signer, and **Not a field**;
-  - drag cards between columns, and move or resize boxes on the page;
+  - collapsible sections for **Needs review** (low confidence, guessed position, or no signer), **You fill**, one per signer, and **Not a field**;
+  - a sticky drop bar: drag a card onto a destination chip (or use "Move to…"), and move or resize boxes on the page;
   - add fields, add or remove signers;
   - clicking a card finds its box, and clicking a box finds its card;
   - autosave;
@@ -45,6 +45,7 @@ cd frontend && uv run npm run dev                         # app on :5173 (proxie
   - draw a signature, or type your name in a script font;
   - dates are prefilled.
 - **Completion:** signatures and values are stamped into the PDF; status and outbox notifications are kept; the signed PDF downloads.
+- **Inbox:** every document with its status and "1 of 2 signed"; delete a document (with confirmation; signing links for sent documents stop working).
 - **Failures stay visible:**
   - if the AI step fails, you still get a draft with every detected blank to assign by hand;
   - damaged or encrypted files get a plain message;

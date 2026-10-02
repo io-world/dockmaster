@@ -191,6 +191,20 @@ def get_envelope(envelope_id: int, user: User = Depends(current_user), db: Sessi
     return _detail(db, _own_envelope(db, envelope_id, user))
 
 
+@app.delete("/api/envelopes/{envelope_id}")
+def delete_envelope(envelope_id: int, user: User = Depends(current_user), db: Session = Depends(get_session)):
+    """Delete an envelope in any state: its rows, its outbox entries and its files (PDF, page images, signed PDF).
+    Signing links for it stop working (they return "not valid")."""
+    env = _own_envelope(db, envelope_id, user)
+    for row in [*_signers(db, env.id), *_fields(db, env.id),
+                *db.exec(select(OutboxEmail).where(OutboxEmail.envelope_id == env.id))]:
+        db.delete(row)
+    db.delete(env)
+    db.commit()
+    shutil.rmtree(envelope_dir(envelope_id), ignore_errors=True)
+    return {"ok": True}
+
+
 @app.get("/api/envelopes/{envelope_id}/pages/{n}.png")
 def envelope_page(envelope_id: int, n: int, user: User = Depends(current_user), db: Session = Depends(get_session)):
     env = _own_envelope(db, envelope_id, user)

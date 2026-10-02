@@ -55,7 +55,7 @@ export default function StatusPage({ id }: { id: number }) {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <Link to="/" className="text-sm text-blue-700 underline">
-            ← Envelopes
+            ← Inbox
           </Link>
           <h1 className="text-lg font-semibold">{st.filename}</h1>
           <StatusBadge status={st.status} />

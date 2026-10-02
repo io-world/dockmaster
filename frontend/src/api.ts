@@ -234,6 +234,7 @@ export const api = {
     return request<EnvelopeDetail>("POST", "/api/envelopes", form);
   },
   getEnvelope: (id: number) => request<EnvelopeDetail>("GET", `/api/envelopes/${id}`),
+  deleteEnvelope: (id: number) => request<{ ok: boolean }>("DELETE", `/api/envelopes/${id}`),
   saveDraft: (id: number, draft: Draft) => request<EnvelopeDetail>("PUT", `/api/envelopes/${id}`, draft),
   send: (id: number) => request<SendResult>("POST", `/api/envelopes/${id}/send`),
   getStatus: (id: number) => request<EnvelopeStatusView>("GET", `/api/envelopes/${id}/status`),

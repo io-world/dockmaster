@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type Draft, type EnvelopeDetail, type FieldType } from "../api";
 import Layout from "../components/Layout";
 import PdfPreview, { type PageClick, type PreviewBox } from "../components/PdfPreview";
-import { ErrorBox, Spinner } from "../components/ui";
+import { ConfirmDialog, ErrorBox, Spinner } from "../components/ui";
 import Board from "../review/Board";
 import { checklist, type Checklist } from "../review/checklist";
 import { addField, DEFAULT_SIZE, moveFieldBox, newFieldId, SENDER_TARGET, type DraftUpdate } from "../review/draft";
@@ -49,24 +49,6 @@ function ChecklistPanel({ list }: { list: Checklist }) {
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function ConfirmDialog({ text, confirm, onConfirm, onCancel }: { text: string; confirm: string; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="w-96 space-y-3 rounded bg-white p-4 shadow-xl" role="dialog">
-        <p className="text-sm">{text}</p>
-        <div className="flex justify-end gap-2">
-          <button className="rounded border px-3 py-1.5 text-sm" onClick={onCancel}>
-            Go back
-          </button>
-          <button className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white" onClick={onConfirm}>
-            {confirm}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -133,6 +115,7 @@ export default function ReviewPage({ id }: { id: number }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeSignerId, setActiveSignerId] = useState<string | null>(null);
   const [pulseId, setPulseId] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<{ fieldId: string; nonce: number } | null>(null);
   const pulseTimer = useRef<number | undefined>(undefined);
   const previewRef = useRef<HTMLElement>(null);
   const [addMode, setAddMode] = useState(false);
@@ -279,15 +262,11 @@ export default function ReviewPage({ id }: { id: number }) {
     pulseTimer.current = window.setTimeout(() => setPulseId(null), 1100);
   };
 
-  // Box -> card: highlight the card and scroll the board to it.
+  // Box -> card: highlight the card; the board opens its section (if collapsed) and scrolls to it.
   const selectBox = (fieldId: string) => {
     setSelectedId(fieldId);
     setActiveSignerId(null);
-    requestAnimationFrame(() =>
-      document
-        .querySelector(`[data-card-id="${CSS.escape(fieldId)}"]`)
-        ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" }),
-    );
+    setReveal((r) => ({ fieldId, nonce: (r?.nonce ?? 0) + 1 }));
   };
 
   // Column header -> highlight all of that signer's boxes.
@@ -390,6 +369,7 @@ export default function ReviewPage({ id }: { id: number }) {
               onSelect={selectCard}
               activeSignerId={activeSignerId}
               onSignerHeader={selectSigner}
+              reveal={reveal}
             />
           </section>
           <aside ref={previewRef} className="relative w-[45%] shrink-0 overflow-y-auto border-l bg-gray-100" data-testid="preview">

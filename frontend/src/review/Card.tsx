@@ -1,8 +1,39 @@
 import type { Field, FieldType, Rejected, Signer } from "../api";
-import { SENDER_TARGET } from "./draft";
+import { SENDER_TARGET, type DropTarget } from "./draft";
 import { confidenceWord, TYPE_ICON, TYPE_LABEL } from "./model";
 
 const TYPES: FieldType[] = ["signature", "initials", "date", "text", "checkbox"];
+
+/** A place a card can be moved to (same list as the drop bar's chips). */
+export interface Destination {
+  key: string;
+  label: string;
+  target: DropTarget;
+}
+
+/** "Move to…" menu: the non-drag way to move a card. */
+function MoveMenu({ placeholder, destinations, onPick }: { placeholder: string; destinations: Destination[]; onPick: (t: DropTarget) => void }) {
+  return (
+    <select
+      data-testid="move-to"
+      className="max-w-[9rem] rounded border px-1 py-0.5 text-xs"
+      value=""
+      onChange={(e) => {
+        const d = destinations.find((x) => x.key === e.target.value);
+        if (d) onPick(d.target);
+      }}
+    >
+      <option value="" disabled>
+        {placeholder}
+      </option>
+      {destinations.map((d) => (
+        <option key={d.key} value={d.key}>
+          {d.label}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 export function FieldCard({
   field,
@@ -14,6 +45,8 @@ export function FieldCard({
   onType,
   onRemove,
   onValue,
+  destinations,
+  onMove,
 }: {
   field: Field;
   signers: Signer[];
@@ -24,6 +57,8 @@ export function FieldCard({
   onType: (t: FieldType) => void;
   onRemove: () => void;
   onValue?: (v: string) => void; // "You fill" fields
+  destinations: Destination[];
+  onMove: (t: DropTarget) => void;
 }) {
   const conf = confidenceWord(field.confidence);
   const needsSigner = field.filled_by === "signer" && !field.signer_id;
@@ -105,6 +140,7 @@ export function FieldCard({
             </option>
           ))}
         </select>
+        <MoveMenu placeholder="Move to…" destinations={destinations} onPick={onMove} />
         <button className="ml-auto text-xs text-red-700 hover:underline" onClick={onRemove} title="Move to Not a field">
           Not a field
         </button>
@@ -113,7 +149,16 @@ export function FieldCard({
   );
 }
 
-export function RejectedCard({ item }: { item: Rejected }) {
+export function RejectedCard({
+  item,
+  destinations,
+  onRestore,
+}: {
+  item: Rejected;
+  destinations: Destination[];
+  onRestore: (t: DropTarget) => void;
+}) {
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
     <div className="rounded border border-dashed border-gray-300 bg-white p-2 text-sm text-gray-700">
       <div className="flex items-center">
@@ -121,6 +166,9 @@ export function RejectedCard({ item }: { item: Rejected }) {
         <span className="ml-auto shrink-0 text-xs text-gray-500">Page {item.page}</span>
       </div>
       <div className="mt-1 text-xs italic text-gray-500">{item.reason}</div>
+      <div className="mt-2" onClick={stop} onPointerDown={stop}>
+        <MoveMenu placeholder="Make a field for…" destinations={destinations} onPick={onRestore} />
+      </div>
     </div>
   );
 }

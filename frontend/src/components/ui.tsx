@@ -77,3 +77,39 @@ export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
+
+export function ConfirmDialog({
+  text,
+  confirm,
+  onConfirm,
+  onCancel,
+  danger = false,
+  busy = false,
+}: {
+  text: ReactNode;
+  confirm: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  danger?: boolean;
+  busy?: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="w-96 space-y-3 rounded bg-white p-4 shadow-xl" role="dialog">
+        <div className="text-sm">{text}</div>
+        <div className="flex justify-end gap-2">
+          <button className="rounded border px-3 py-1.5 text-sm" onClick={onCancel} disabled={busy}>
+            Go back
+          </button>
+          <button
+            className={`rounded px-3 py-1.5 text-sm text-white disabled:opacity-50 ${danger ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}
+            onClick={onConfirm}
+            disabled={busy}
+          >
+            {confirm}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

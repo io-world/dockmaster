@@ -5,6 +5,13 @@ import { Rnd } from "react-rnd";
 import type { BBox, Page } from "../api";
 import { bboxToPx, pageScale, pxToBbox, pxToPoint } from "../geometry";
 
+const RESIZE_ENABLED = { right: true, bottom: true, bottomRight: true, top: false, left: false, topLeft: false, topRight: false, bottomLeft: false };
+const RESIZE_HANDLES = {
+  right: { width: 6, right: -7, top: 0, height: "100%", cursor: "ew-resize" },
+  bottom: { height: 6, bottom: -7, left: 0, width: "100%", cursor: "ns-resize" },
+  bottomRight: { width: 10, height: 10, right: -10, bottom: -10, cursor: "nwse-resize" },
+};
+
 export interface PageClick {
   page: number;
   point: [number, number]; // PDF points
@@ -116,6 +123,10 @@ function PageView({
                 position={{ x: r.left, y: r.top }}
                 minWidth={6}
                 minHeight={6}
+                // Handles sit just outside the box (right, bottom, corner only). react-rnd's default handles straddle
+                // every edge and cover thin boxes entirely, so clicks/drags on a 10px-tall field hit a resize handle.
+                enableResizing={RESIZE_ENABLED}
+                resizeHandleStyles={RESIZE_HANDLES}
                 className={`${hi ? "z-10" : ""} ${b.pulse ? "box-pulse" : ""}`}
                 style={style}
                 onDragStop={(_e, d) => {

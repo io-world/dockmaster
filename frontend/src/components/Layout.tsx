@@ -17,7 +17,7 @@ export default function Layout({ children, wide = false }: { children: ReactNode
           <Link to="/" className="font-semibold">
             DockMaster
           </Link>
-          {nav("/", "Envelopes", path === "/" || path.startsWith("/envelopes"))}
+          {nav("/", "Inbox", path === "/" || path.startsWith("/envelopes"))}
           {nav("/outbox", "Outbox", path === "/outbox")}
           <div className="ml-auto flex items-center gap-3 text-sm text-gray-600">
             <span>{user?.email}</span>

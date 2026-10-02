@@ -11,7 +11,7 @@ corrects the proposal instead of building it from scratch.
 - Build for the general case. Never tune to specific test PDFs.
 - Effort cap: 10–15 hours. Prefer six things working over eleven half-built.
 
-## Current status (handoff — updated 2026-10-02, end of session 1)
+## Current status (handoff — updated 2026-10-03, session 2)
 Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libraries in `TECH_STACK.md`.
 
 **Done and verified**
@@ -19,6 +19,9 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
 - Backend API (`backend/app/api.py`, see the API section below), auth, outbox, stamping, AI-failure fallback.
 - Frontend steps 1–6 (auth, envelopes, review board with DnD/boxes/add field/autosave/checklist/send, signing,
   status, outbox).
+- Session 2 (2026-10-03): nav "Envelopes" renamed to "Inbox"; delete documents from the Inbox (with confirmation).
+  Review board is now vertical collapsible sections + a sticky drop bar (chips), with auto-scroll off and a "Move to…"
+  menu on cards. Thin-box resize-handle bug fixed. Full journey re-verified.
 - Step 7: full journey passes against the production Docker container (`backend/scripts/e2e_journey.py`).
 - `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
 - README.md and AI_TOOLING_NOTES.md drafted.
@@ -169,6 +172,7 @@ POST /api/envelopes                             multipart PDF → pipeline (sync
 GET  /api/envelopes/{id}                        detail: pages(image_url), parties, signers, fields, rejected
                                                 (with page/bbox/label), missing_fields, warnings, ai{ok,model,cost}
 GET  /api/envelopes/{id}/pages/{n}.png
+DELETE /api/envelopes/{id}                      delete in any state (rows, outbox entries, files); signing links die
 PUT  /api/envelopes/{id}                        {signers, fields, rejected}: bulk replace (draft only)
 POST /api/envelopes/{id}/send                   400 {problems:[...]} or {status, self_sign_token}
 GET  /api/envelopes/{id}/status                 signers (status, signed_at), outbox, final_pdf_url
