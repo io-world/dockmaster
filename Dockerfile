@@ -20,9 +20,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY backend/app backend/app
 COPY --from=web /web/dist frontend/dist
 
-# SQLite DB + uploaded PDFs + page images + signed PDFs. Mount a persistent volume at /data
-# (docker run -v ...:/data, or the host's volume UI). No VOLUME instruction: some hosts (Railway) reject it.
+# SQLite DB + uploaded PDFs + page images + signed PDFs. Mount a persistent volume here.
 ENV DATA_DIR=/data PATH=/opt/venv/bin:$PATH
+VOLUME /data
 EXPOSE 8000
 # ANTHROPIC_API_KEY must be provided at runtime (never baked into the image). PORT is set by most hosts.
 CMD ["sh", "-c", "uvicorn app.api:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8000}"]
