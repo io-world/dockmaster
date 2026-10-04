@@ -22,17 +22,17 @@ def sign_all(pg, who, draw):
     while pg.locator("[data-testid=next-field]").is_enabled():
         pg.click("[data-testid=next-field]"); pg.wait_for_timeout(500)
         box = pg.locator("[data-box-id].ring-2")
-        if box.locator("text=/Sign here|Initial here/").count():
-            box.locator("button").click(); pg.wait_for_selector("[data-testid=signature-modal]")
-            if draw:
+        if box.locator("[data-testid=sig-input]").count():
+            if draw:  # "✎ Draw" opens the pad
+                box.locator("[data-testid=sig-draw]").click(); pg.wait_for_selector("[data-testid=signature-modal]")
                 c = pg.locator("[data-testid=signature-canvas]").bounding_box()
                 pg.mouse.move(c["x"] + 30, c["y"] + 90); pg.mouse.down()
                 for i in range(1, 25): pg.mouse.move(c["x"] + 30 + i * 14, c["y"] + 90 + (22 if i % 2 else -22), steps=2)
                 pg.mouse.up()
-            else:
-                pg.click("text=Type your name")
-                if not pg.locator("[data-testid=signature-modal] input").input_value(): pg.fill("[data-testid=signature-modal] input", who)
-            pg.locator("[data-testid=signature-modal] button", has_text="Apply").click(); pg.wait_for_timeout(200)
+                pg.locator("[data-testid=signature-modal] button", has_text="Apply").click()
+            else:  # typed straight into the box
+                box.locator("[data-testid=sig-input]").fill(who)
+            pg.wait_for_timeout(200)
         else:
             box.locator("input").fill(f"{who} entry")
     pg.click("[data-testid=finish]"); pg.wait_for_selector("[data-testid=signed-confirmation]")

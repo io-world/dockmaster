@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type Field, type SigningView } from "../api";
 import DocChat from "../components/DocChat";
 import PdfPreview, { type PreviewBox } from "../components/PdfPreview";
-import SignatureModal from "../components/SignatureModal";
+import SignatureModal, { SCRIPT_FONT, textSignaturePng } from "../components/SignatureModal";
 import { ErrorBox, Spinner } from "../components/ui";
 import { bboxToPx } from "../geometry";
 import { TYPE_LABEL } from "../review/model";
@@ -47,6 +47,16 @@ export default function SignPage({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [signing, setSigning] = useState<Field | null>(null);
+  // Signatures typed straight into the box: the text per field. The field's value is that text rendered as a PNG.
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const typedRef = useRef(typed);
+  typedRef.current = typed;
+  const typeSignature = (id: string, text: string) => {
+    setTyped((cur) => ({ ...cur, [id]: text }));
+    textSignaturePng(text).then((png) => {
+      if (typedRef.current[id] === text) setValue(id, png ?? ""); // latest keystroke wins
+    });
+  };
   const [active, setActive] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<{ message: string; problems: string[] } | null>(null);
@@ -94,7 +104,10 @@ export default function SignPage({ token }: { token: string }) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await api.submitSigning(token, Object.fromEntries(mine.map((f) => [f.id, values[f.id] ?? null])));
+      // Render any typed signature now, in case its image from the last keystroke isn't ready yet.
+      const out = { ...values };
+      for (const [id, text] of Object.entries(typed)) out[id] = (await textSignaturePng(text)) ?? "";
+      await api.submitSigning(token, Object.fromEntries(mine.map((f) => [f.id, out[f.id] ?? null])));
       setDone(true);
       load();
     } catch (e) {
@@ -198,14 +211,32 @@ export default function SignPage({ token }: { token: string }) {
     return (
       <div key={b.id} data-box-id={f.id} className={`absolute ${f.type === "radio" ? "rounded-full" : "rounded-sm"} border-2 ${border} ${ring}`} style={pos} onClick={() => setActive(f.id)}>
         {(f.type === "signature" || f.type === "initials") &&
-          (v ? (
+          (v && typed[f.id] === undefined ? (
+            // A drawn signature: show it; click to change.
             <button className="h-full w-full" onClick={() => setSigning(f)} title="Change">
               <img src={v} alt="Your signature" className="h-full w-full object-contain object-left" />
             </button>
           ) : (
-            <button className="h-full w-full text-left font-medium text-amber-800" style={{ fontSize }} onClick={() => setSigning(f)}>
-              {f.type === "initials" ? "Initial here" : "Sign here"}
-            </button>
+            <>
+              <input
+                data-testid="sig-input"
+                value={typed[f.id] ?? ""}
+                onChange={(e) => typeSignature(f.id, e.target.value)}
+                onFocus={() => setActive(f.id)}
+                placeholder={f.type === "initials" ? "Type initials" : "Type your name to sign"}
+                aria-label={f.type === "initials" ? "Your initials" : "Your signature (type your name)"}
+                className="block h-full w-full bg-transparent pl-1 pr-12 text-[#0b2a6f] outline-none placeholder:font-sans placeholder:text-xs placeholder:font-medium placeholder:text-amber-800"
+                style={{ fontFamily: SCRIPT_FONT, fontSize: Math.max(12, Math.min(r.height * 0.8, 30)) }}
+              />
+              <button
+                data-testid="sig-draw"
+                onClick={() => setSigning(f)}
+                title="Draw your signature instead"
+                className="absolute right-0.5 top-1/2 -translate-y-1/2 rounded bg-white/80 px-1 text-[10px] text-blue-700 hover:underline"
+              >
+                ✎ Draw
+              </button>
+            </>
           ))}
         {(f.type === "text" || f.type === "date") && (
           <input
@@ -333,6 +364,7 @@ export default function SignPage({ token }: { token: string }) {
           defaultName={view.signer.name ?? ""}
           onCancel={() => setSigning(null)}
           onDone={(png) => {
+            setTyped(({ [signing.id]: _drop, ...rest }) => rest); // a drawn signature replaces typed text
             setValue(signing.id, png);
             setSigning(null);
           }}

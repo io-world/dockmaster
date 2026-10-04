@@ -108,7 +108,7 @@ export default function StatusPage({ id }: { id: number }) {
 
         <section>
           <h2 className="mb-2 font-medium">Notifications for this envelope</h2>
-          {st.outbox.length === 0 ? <p className="text-sm text-gray-600">None yet.</p> : <OutboxList entries={[...st.outbox].reverse()} />}
+          {st.outbox.length === 0 ? <p className="text-sm text-gray-600">None yet.</p> : <OutboxList entries={[...st.outbox].reverse()} onChanged={load} />}
         </section>
       </div>
     </Layout>

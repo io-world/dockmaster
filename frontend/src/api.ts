@@ -138,6 +138,8 @@ export interface OutboxEntry {
   event: "sent" | "your_turn" | "signed" | "completed";
   link: string | null;
   created_at: string;
+  can_resend: boolean; // newest "your turn" for someone who still has to sign: email can be edited and resent
+  link_replaced: boolean; // the email was changed since: this old link no longer works
 }
 
 export interface StatusSigner {
@@ -261,6 +263,8 @@ export const api = {
   send: (id: number) => request<SendResult>("POST", `/api/envelopes/${id}/send`),
   getStatus: (id: number) => request<EnvelopeStatusView>("GET", `/api/envelopes/${id}/status`),
   outbox: () => request<OutboxEntry[]>("GET", "/api/outbox"),
+  resendLink: (entryId: number, email: string) =>
+    request<{ ok: boolean; changed: boolean }>("POST", `/api/outbox/${entryId}/resend`, { email }),
   askEnvelope: (id: number, question: string, history: ChatMessage[]) =>
     request<AskResult>("POST", `/api/envelopes/${id}/ask`, { question, history }),
 

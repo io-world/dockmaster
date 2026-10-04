@@ -184,7 +184,8 @@ GET  /api/envelopes/{id}/status                 signers (status, signed_at), out
 GET  /api/envelopes/{id}/final.pdf
 GET  /api/sign/{token}                          envelope, signer, can_sign, pages, fields (mine), others, prefilled
 GET  /api/sign/{token}/pages/{n}.png            POST /api/sign/{token} {values:{field_id: value}}
-GET  /api/sign/{token}/final.pdf                GET /api/outbox
+GET  /api/sign/{token}/final.pdf                GET /api/outbox (+ can_resend, link_replaced)
+POST /api/outbox/{id}/resend {email}            resend a "your turn" link; a changed email rotates the token
 POST /api/envelopes/{id}/ask  |  POST /api/sign/{token}/ask   {question, history} -> {answer, meta}; doc-grounded Q&A, no storage
 ```
 Field values: text/date as text; checkbox/radio "true"/"false" (one "true" per radio group); signature/initials as a PNG data URL (transparent background).

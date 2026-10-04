@@ -426,7 +426,7 @@ def envelope_status(envelope_id: int, user: User = Depends(current_user), db: Se
                          ("id", "label", "role", "name", "email", "is_self", "order", "status", "signed_at")}
                         | {"sign_url": f"/sign/{s.token}" if s.is_self and s.token and s.status != "signed" else None}
                         for s in _signers(db, env.id)],
-            "outbox": [_outbox_json(o) for o in entries]}
+            "outbox": _outbox_list(db, list(entries))}
 
 
 @app.get("/api/envelopes/{envelope_id}/final.pdf")
@@ -607,10 +607,75 @@ def _outbox_json(o: OutboxEmail) -> dict:
             "event": o.event, "link": o.link, "created_at": _iso(o.created_at)}
 
 
+def _token_of(link: str | None) -> str | None:
+    return link[len("/sign/"):] if link and link.startswith("/sign/") else None
+
+
+def _outbox_list(db: Session, rows: list[OutboxEmail]) -> list[dict]:
+    """Outbox entries, plus what the sender can do with each "your turn" link:
+    can_resend on the newest entry for a signer who still has to sign; link_replaced once the email was changed
+    (the token was rotated, so that old link no longer works)."""
+    tokens = {t for o in rows if (t := _token_of(o.link))}
+    signers = {s.token: s for s in db.exec(select(Signer).where(Signer.token.in_(tokens)))} if tokens else {}
+    envs = {e.id: e for e in db.exec(select(Envelope).where(Envelope.id.in_({o.envelope_id for o in rows})))} if rows else {}
+    newest: dict[str, int] = {}
+    for o in rows:
+        t = _token_of(o.link)
+        if o.event == "your_turn" and t:
+            newest[t] = max(newest.get(t, 0), o.id)
+    out = []
+    for o in rows:
+        t = _token_of(o.link)
+        s = signers.get(t) if t else None
+        env = envs.get(o.envelope_id)
+        turn = o.event == "your_turn" and t is not None
+        out.append(_outbox_json(o) | {
+            "can_resend": bool(turn and s and env and env.status == "sent" and s.status == "notified"
+                               and newest.get(t) == o.id),
+            "link_replaced": bool(turn and s is None),
+        })
+    return out
+
+
 @app.get("/api/outbox")
 def outbox(user: User = Depends(current_user), db: Session = Depends(get_session)):
     rows = db.exec(select(OutboxEmail).where(OutboxEmail.owner_id == user.id).order_by(OutboxEmail.created_at.desc()))
-    return [_outbox_json(o) for o in rows]
+    return _outbox_list(db, list(rows))
+
+
+class ResendIn(BaseModel):
+    email: str
+
+
+@app.post("/api/outbox/{entry_id}/resend")
+def resend_link(entry_id: int, body: ResendIn, user: User = Depends(current_user), db: Session = Depends(get_session)):
+    """Send a signer's link again, optionally to a corrected email. A changed email gets a new link: the old one
+    (which may have gone to the wrong person) stops working."""
+    entry = db.get(OutboxEmail, entry_id)
+    if not entry or entry.owner_id != user.id:
+        raise HTTPException(404, "Outbox entry not found")
+    token = _token_of(entry.link)
+    s = db.exec(select(Signer).where(Signer.token == token)).first() if token else None
+    env = db.get(Envelope, entry.envelope_id)
+    if entry.event != "your_turn" or not s or not env:
+        raise HTTPException(409, "This link was replaced by a newer one")
+    if env.status != "sent" or s.status != "notified":
+        raise HTTPException(409, "This person has already signed" if s.status == "signed" else "It isn't their turn yet")
+    email = body.email.strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(400, "Enter a valid email")
+    changed = email != (s.email or "")
+    if changed:
+        s.email, s.token = email, secrets.token_urlsafe(24)
+        db.add(s)
+    who = s.label if not s.is_self else "you"
+    notify(db, env, s.email, "your_turn",
+           f"{'Please sign' if changed else 'Reminder: please sign'}: {env.filename}",
+           f"{user.email} sent you \"{env.filename}\" to sign as {who}. Open the link to review and sign."
+           + (" (Sent to a corrected email address.)" if changed else ""),
+           link=f"/sign/{s.token}")
+    db.commit()
+    return {"ok": True, "changed": changed}
 
 
 # ---------- built frontend (production) ----------

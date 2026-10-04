@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import SignaturePad from "signature_pad";
 
-const SCRIPT_FONT = '"Dancing Script", "Brush Script MT", cursive';
+export const SCRIPT_FONT = '"Dancing Script", "Brush Script MT", cursive';
 
 /** Crop a canvas to its non-transparent pixels (plus padding) and return a PNG data URL, or null if empty. */
 function trimmedPng(canvas: HTMLCanvasElement, pad = 8): string | null {
@@ -29,6 +29,26 @@ function trimmedPng(canvas: HTMLCanvasElement, pad = 8): string | null {
   out.height = y1 - y0 + 1;
   out.getContext("2d")!.drawImage(canvas, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
   return out.toDataURL("image/png");
+}
+
+/** A typed name rendered in the script font: a transparent, trimmed PNG data URL (null for empty text). */
+export async function textSignaturePng(text: string): Promise<string | null> {
+  const t = text.trim();
+  if (!t) return null;
+  try {
+    await document.fonts.load(`64px ${SCRIPT_FONT}`);
+  } catch {
+    /* fall back to whatever cursive font is available */
+  }
+  const c = document.createElement("canvas");
+  c.width = 1200;
+  c.height = 220;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#0b2a6f";
+  ctx.font = `96px ${SCRIPT_FONT}`;
+  ctx.textBaseline = "middle";
+  ctx.fillText(t, 20, 110, 1160);
+  return trimmedPng(c);
 }
 
 export default function SignatureModal({
@@ -67,24 +87,7 @@ export default function SignatureModal({
     return () => pad.off();
   }, [mode]);
 
-  const typedPng = async (): Promise<string | null> => {
-    const text = typed.trim();
-    if (!text) return null;
-    try {
-      await document.fonts.load(`64px ${SCRIPT_FONT}`);
-    } catch {
-      /* fall back to whatever cursive font is available */
-    }
-    const c = document.createElement("canvas");
-    c.width = 1200;
-    c.height = 220;
-    const ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#0b2a6f";
-    ctx.font = `96px ${SCRIPT_FONT}`;
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, 20, 110, 1160);
-    return trimmedPng(c);
-  };
+  const typedPng = () => textSignaturePng(typed);
 
   const done = async () => {
     const png = mode === "draw" ? (canvasRef.current ? trimmedPng(canvasRef.current) : null) : await typedPng();

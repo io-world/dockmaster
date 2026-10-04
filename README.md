@@ -45,13 +45,15 @@ The dev server also listens on your network, so you can test on a phone at `http
 - **Signing:**
   - no account needed;
   - only your own fields are active, with "Next field";
-  - draw a signature, or type your name in a script font;
+  - type your name straight into the signature box (shown in a script font), or draw it;
   - the sender fills their part (preamble blanks, their own signature) on the document right after Send, and the
     others are notified only when they finish;
   - dates are prefilled;
   - radio choices allow exactly one option, and Finish waits until each required choice is answered.
 - **Ask about the document:** the sender (in Review) and each signer (on their signing page) can ask questions. Answers come only from the document, with clickable page references. They aren't legal advice, and the conversation isn't stored.
 - **Completion:** signatures and values are stamped into the PDF; status and outbox notifications are kept; the signed PDF downloads.
+- **Outbox:** fix a recipient's email and resend their link (a corrected address gets a new link and the old one stops
+  working), or just send a reminder.
 - **Inbox:** every document with its status and "1 of 2 signed"; delete a document (with confirmation; signing links for sent documents stop working).
 - **Failures stay visible:**
   - if the AI step fails, you still get a draft with every detected blank to assign by hand;

@@ -32,7 +32,7 @@ export default function OutboxPage() {
         {error && <ErrorBox message={error} onRetry={load} />}
         {!entries && !error && <Spinner label="Loading…" />}
         {entries && entries.length === 0 && <p className="text-gray-600">Nothing yet. Notifications appear here when you send an envelope.</p>}
-        {entries && entries.length > 0 && <OutboxList entries={entries} />}
+        {entries && entries.length > 0 && <OutboxList entries={entries} onChanged={load} />}
       </div>
     </Layout>
   );
