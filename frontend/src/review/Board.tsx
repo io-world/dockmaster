@@ -16,29 +16,31 @@ import {
 } from "@dnd-kit/core";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Draft, Field, Party, Signer } from "../api";
-import { FieldCard, RejectedCard, type Destination } from "./Card";
+import { FieldCard, RejectedCard, type Destination, type RadioInfo } from "./Card";
 import {
   acceptField,
   addSigner,
   byPosition,
   moveFieldTo,
+  newGroupId,
   rejectedKey,
   removeField,
   removeSigner,
   restoreRejected,
   setFieldType,
-  setFieldValue,
+  setRadioGroup,
   setSelf,
   updateSigner,
   type DraftUpdate,
   type DropTarget,
 } from "./draft";
-import { needsReview, SENDER_COLOR, signerColor, TYPE_ICON, TYPE_LABEL, UNASSIGNED_COLOR } from "./model";
+import { groupName, needsReview, radioGroup, SENDER_COLOR, signerColor, TYPE_ICON, TYPE_LABEL, UNASSIGNED_COLOR } from "./model";
 import { EMAIL_RE } from "./checklist";
 
 const REJECTED_COLOR = "#9ca3af";
-/** Which section a field is shown in. */
-export const sectionOf = (f: Field) => (needsReview(f) ? "review" : f.filled_by === "sender" ? "sender" : (f.signer_id ?? "review"));
+/** Which section a field is shown in. "You" fields join the "This is me" signer's section when there is one. */
+export const sectionOf = (f: Field, selfId: string | null) =>
+  needsReview(f) ? "review" : f.filled_by === "sender" ? (selfId ?? "sender") : (f.signer_id ?? "review");
 
 const badEmail = (s: Signer) => !s.email || !EMAIL_RE.test(s.email.trim());
 const signerProblem = (s: Signer) => !s.name?.trim() || badEmail(s);
@@ -214,6 +216,8 @@ function SignerDetails({ signer, parties, apply }: { signer: Signer; parties: Pa
   );
 }
 
+const YOU_NOTE = "You fill these on the document right after you click Send, before anyone else is notified.";
+
 const CARD_GRID = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(250px,1fr))]";
 
 export default function Board({
@@ -236,6 +240,7 @@ export default function Board({
   reveal: { fieldId: string; nonce: number } | null; // box -> card: open its section and scroll to it
 }) {
   const scroller = useRef<HTMLDivElement>(null);
+  const selfId = draft.signers.find((s) => s.is_self)?.id ?? null; // the sender, when they also sign
   const [dragging, setDragging] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -269,7 +274,7 @@ export default function Board({
     if (!reveal) return;
     const f = draft.fields.find((x) => x.id === reveal.fieldId);
     if (!f) return;
-    setOpen((o) => ({ ...o, [sectionOf(f)]: true }));
+    setOpen((o) => ({ ...o, [sectionOf(f, selfId)]: true }));
     const t = window.setTimeout(
       () => document.querySelector(`[data-card-id="${CSS.escape(reveal.fieldId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
       60,
@@ -291,17 +296,17 @@ export default function Board({
   const fields = [...draft.fields].sort(byPosition);
   const review = fields.filter(needsReview);
   const sender = fields.filter((f) => f.filled_by === "sender" && !needsReview(f));
-  const bySigner = (id: string) => fields.filter((f) => f.signer_id === id && f.filled_by === "signer" && !needsReview(f));
+  const bySigner = (id: string) => fields.filter((f) => !needsReview(f) && (f.filled_by === "sender" ? id === selfId : f.signer_id === id));
   const draggedField = dragging?.startsWith("field:") ? draft.fields.find((f) => f.id === dragging.slice(6)) : undefined;
   const draggedRejected = dragging?.startsWith("rej:") ? draft.rejected.find((r) => rejectedKey(r) === dragging.slice(4)) : undefined;
 
   // Destinations, in board order (shared by the drop bar and the cards' "Move to…" menus).
   const destinations: (Destination & { color: string; count: number })[] = [
     { key: "review", label: "Needs review", target: { kind: "review" }, color: UNASSIGNED_COLOR, count: review.length },
-    { key: "sender", label: "You fill", target: { kind: "sender" }, color: SENDER_COLOR, count: sender.length },
+    ...(selfId ? [] : [{ key: "sender", label: "You", target: { kind: "sender" } as DropTarget, color: SENDER_COLOR, count: sender.length }]),
     ...draft.signers.map((s) => ({
       key: s.id,
-      label: s.name?.trim() || s.label,
+      label: (s.is_self ? "You · " : "") + (s.name?.trim() || s.label),
       target: { kind: "signer", signerId: s.id } as DropTarget,
       color: signerColor(draft.signers, s.id),
       count: bySigner(s.id).length,
@@ -309,19 +314,35 @@ export default function Board({
     { key: "rejected", label: "Not a field", target: { kind: "rejected" }, color: REJECTED_COLOR, count: draft.rejected.length },
   ];
 
+  const radioInfo = (f: Field): RadioInfo | undefined => {
+    if (f.type !== "radio" || !f.group_id) return undefined;
+    const options = radioGroup(draft.fields, f);
+    const others = new Map<string, Field[]>();
+    for (const x of draft.fields)
+      if (x.type === "radio" && x.group_id && x.group_id !== f.group_id && x.page === f.page)
+        others.set(x.group_id, [...(others.get(x.group_id) ?? []), x]);
+    return {
+      index: options.findIndex((o) => o.id === f.id),
+      count: options.length,
+      name: groupName(options),
+      groups: [...others].map(([id, opts]) => ({ id, name: groupName(opts) })),
+      onGroup: (g) => apply(setRadioGroup(f.id, g ?? newGroupId())),
+    };
+  };
+
   const card = (f: Field) => (
     <Draggable key={f.id} id={`field:${f.id}`}>
       <FieldCard
         field={f}
         signers={draft.signers}
-        inNeedsReview={sectionOf(f) === "review"}
+        inNeedsReview={sectionOf(f, selfId) === "review"}
         selected={selectedId === f.id}
         onSelect={() => onSelect(f.id)}
         onAccept={(target) => apply(acceptField(f.id, target))}
         onType={(t) => apply(setFieldType(f.id, t))}
         onRemove={() => apply(removeField(f.id))}
-        onValue={f.filled_by === "sender" ? (v) => apply(setFieldValue(f.id, v)) : undefined}
-        destinations={destinations.filter((d) => d.key !== sectionOf(f))}
+        radio={radioInfo(f)}
+        destinations={destinations.filter((d) => d.key !== sectionOf(f, selfId))}
         onMove={(t) => apply(moveFieldTo(f.id, t))}
       />
     </Draggable>
@@ -344,17 +365,19 @@ export default function Board({
             )}
           </Section>
 
-          <Section sectionKey="sender" target={{ kind: "sender" }} title="You fill before sending" color={SENDER_COLOR} count={sender.length}
-            open={isOpen("sender")} onToggle={() => toggle("sender")}>
-            {sender.length === 0 ? (
-              <p className="text-sm text-gray-600">Nothing for you to fill. Drop a field here if you'll complete it before sending.</p>
-            ) : (
-              <>
-                <p className="text-xs text-gray-600">Values you complete now (e.g. amounts, dates, names in the text).</p>
-                <div className={CARD_GRID}>{sender.map(card)}</div>
-              </>
-            )}
-          </Section>
+          {!selfId && (
+            <Section sectionKey="sender" target={{ kind: "sender" }} title="You" color={SENDER_COLOR} count={sender.length}
+              open={isOpen("sender")} onToggle={() => toggle("sender")}>
+              {sender.length === 0 ? (
+                <p className="text-sm text-gray-600">Nothing for you to fill. Drop a field here if you'll complete it yourself (e.g. a name or date in the text).</p>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-600">{YOU_NOTE}</p>
+                  <div className={CARD_GRID}>{sender.map(card)}</div>
+                </>
+              )}
+            </Section>
+          )}
 
           {draft.signers.map((s) => {
             const mine = bySigner(s.id);
@@ -363,7 +386,7 @@ export default function Board({
                 key={s.id}
                 sectionKey={s.id}
                 target={{ kind: "signer", signerId: s.id }}
-                title={s.name?.trim() || s.label}
+                title={(s.is_self ? "You · " : "") + (s.name?.trim() || s.label)}
                 color={signerColor(draft.signers, s.id)}
                 count={mine.length}
                 open={isOpen(s.id)}
@@ -380,6 +403,7 @@ export default function Board({
                 }
                 header={<SignerDetails signer={s} parties={parties} apply={apply} />}
               >
+                {s.is_self && mine.length > 0 && <p className="text-xs text-gray-600">{YOU_NOTE}</p>}
                 {mine.length === 0 ? <p className="text-sm text-gray-600">No fields yet.</p> : <div className={CARD_GRID}>{mine.map(card)}</div>}
               </Section>
             );

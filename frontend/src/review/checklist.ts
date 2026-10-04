@@ -41,14 +41,12 @@ export function checklist(d: Draft): Checklist {
     level: "block",
   });
 
-  const emptySender = d.fields.filter((f) => f.filled_by === "sender" && f.required && !(f.value ?? "").trim());
-  if (d.fields.some((f) => f.filled_by === "sender"))
-    items.push({
-      ok: emptySender.length === 0,
-      text: emptySender.length ? `${emptySender.length} "You fill" field(s) are empty` : `All "You fill" fields are filled`,
-      level: "block",
-    });
-
+  // Radio choices: one owner per choice. ("You" fields are filled on the document after Send.)
+  const groups = new Map<string, Draft["fields"]>();
+  for (const f of d.fields) if (f.type === "radio" && f.group_id) groups.set(f.group_id, [...(groups.get(f.group_id) ?? []), f]);
+  const mixed = [...groups.values()].filter((g) => new Set(g.map((f) => `${f.filled_by}:${f.signer_id}`)).size > 1);
+  if (mixed.length)
+    items.push({ ok: false, text: `${mixed.length} choice(s) have options given to different people`, level: "block" });
   const review = d.fields.filter(needsReview).filter((f) => !(f.filled_by === "signer" && !f.signer_id));
   items.push({
     ok: review.length === 0,

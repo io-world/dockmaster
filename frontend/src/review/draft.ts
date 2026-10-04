@@ -8,11 +8,37 @@ export const editField = (id: string, patch: Partial<Field>): DraftUpdate => (d)
   fields: d.fields.map((f) => (f.id === id ? { ...f, ...patch, source: "user" } : f)),
 });
 
+/** The ids of a field's radio group (all options of one choice), or just the field. */
+const groupIds = (d: Draft, id: string): Set<string> => {
+  const f = d.fields.find((x) => x.id === id);
+  if (!f || f.type !== "radio" || !f.group_id) return new Set([id]);
+  return new Set(d.fields.filter((x) => x.type === "radio" && x.group_id === f.group_id).map((x) => x.id));
+};
+
+/** Like editField, but a radio option's whole group gets the patch: one choice has one owner. */
+const editGroup = (id: string, patch: Partial<Field>): DraftUpdate => (d) => {
+  const ids = groupIds(d, id);
+  return { ...d, fields: d.fields.map((f) => (ids.has(f.id) ? { ...f, ...patch, source: "user" } : f)) };
+};
+
+let groupSeq = 0;
+export const newGroupId = () => `gu${Date.now().toString(36)}${(groupSeq++).toString(36)}`;
+
+/** Put a radio option in another group (or a new one); it takes on that group's owner. */
+export const setRadioGroup = (id: string, groupId: string): DraftUpdate => (d) => {
+  const owner = d.fields.find((f) => f.type === "radio" && f.group_id === groupId && f.id !== id);
+  return editField(id, {
+    group_id: groupId,
+    value: null,
+    ...(owner ? { signer_id: owner.signer_id, filled_by: owner.filled_by } : {}),
+  })(d);
+};
+
 export const SENDER_TARGET = "__sender";
 
 /** "Looks right": the sender confirms the field, optionally choosing who fills it (a signer id or SENDER_TARGET). */
 export const acceptField = (id: string, target?: string | null): DraftUpdate =>
-  editField(
+  editGroup(
     id,
     target === undefined || target === null
       ? {}
@@ -21,9 +47,12 @@ export const acceptField = (id: string, target?: string | null): DraftUpdate =>
         : { filled_by: "signer", signer_id: target },
   );
 
-export const setFieldType = (id: string, type: FieldType): DraftUpdate => editField(id, { type });
-
-export const setFieldValue = (id: string, value: string): DraftUpdate => editField(id, { value });
+export const setFieldType = (id: string, type: FieldType): DraftUpdate => (d) => {
+  const f = d.fields.find((x) => x.id === id);
+  if (!f || f.type === type) return d;
+  // Becoming a radio starts a choice of its own (join another with the group picker); leaving one clears it.
+  return editField(id, type === "radio" ? { type, group_id: newGroupId(), value: null } : { type, group_id: null, value: f.type === "radio" ? null : f.value })(d);
+};
 
 /** Move a field to "Not a field". Keeps its geometry so it can be turned back into a field. */
 export const removeField = (id: string): DraftUpdate => (d) => {
@@ -93,9 +122,9 @@ export const newFieldId = () => `u${Date.now().toString(36)}${(seq++).toString(3
 /** Drop a field card on a column. */
 export const moveFieldTo = (id: string, t: DropTarget): DraftUpdate => {
   if (t.kind === "rejected") return removeField(id);
-  if (t.kind === "sender") return editField(id, { filled_by: "sender", signer_id: null });
-  if (t.kind === "review") return editField(id, { filled_by: "signer", signer_id: null });
-  return editField(id, { filled_by: "signer", signer_id: t.signerId });
+  if (t.kind === "sender") return editGroup(id, { filled_by: "sender", signer_id: null });
+  if (t.kind === "review") return editGroup(id, { filled_by: "signer", signer_id: null });
+  return editGroup(id, { filled_by: "signer", signer_id: t.signerId });
 };
 
 /** A sensible first type from the blank's label; the sender can change it on the card. */
@@ -146,6 +175,23 @@ export const DEFAULT_SIZE: Record<FieldType, [number, number]> = {
   date: [100, 16],
   text: [170, 16],
   checkbox: [12, 12],
+  radio: [12, 12],
 };
 
 export const addField = (field: Field): DraftUpdate => (d) => ({ ...d, fields: [...d.fields, field] });
+
+/** "Reset to AI suggestions": fields and "Not a field" go back to the AI's proposal (who fills what, types, boxes;
+ * removed fields return, added ones go). Signers go back to the AI's list but keep the name, email and "this is me"
+ * the sender typed, and "You fill" values are kept for fields that are still "You fill". */
+export const resetToAi = (ai: Draft): DraftUpdate => (d) => {
+  const signers = new Map(d.signers.map((s) => [s.id, s]));
+  const values = new Map(d.fields.map((f) => [f.id, f.value]));
+  return {
+    signers: ai.signers.map((s) => {
+      const cur = signers.get(s.id);
+      return cur ? { ...s, name: cur.name, email: cur.email, is_self: cur.is_self } : s;
+    }),
+    fields: ai.fields.map((f) => (f.filled_by === "sender" ? { ...f, value: values.get(f.id) ?? f.value } : f)),
+    rejected: ai.rejected,
+  };
+};

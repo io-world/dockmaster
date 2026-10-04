@@ -1,8 +1,15 @@
 import type { Field, FieldType, Rejected, Signer } from "../api";
 import { SENDER_TARGET, type DropTarget } from "./draft";
-import { confidenceWord, TYPE_ICON, TYPE_LABEL } from "./model";
+import { confidenceWord, FIELD_TYPES, TYPE_ICON, TYPE_LABEL } from "./model";
 
-const TYPES: FieldType[] = ["signature", "initials", "date", "text", "checkbox"];
+/** For a radio option: its place in its choice, and the choices it could move to. */
+export interface RadioInfo {
+  index: number; // 0-based
+  count: number;
+  name: string;
+  groups: { id: string; name: string }[]; // other choices on the same page
+  onGroup: (groupId: string | null) => void; // null = a new choice of its own
+}
 
 /** A place a card can be moved to (same list as the drop bar's chips). */
 export interface Destination {
@@ -44,9 +51,9 @@ export function FieldCard({
   onAccept,
   onType,
   onRemove,
-  onValue,
   destinations,
   onMove,
+  radio,
 }: {
   field: Field;
   signers: Signer[];
@@ -56,9 +63,9 @@ export function FieldCard({
   onAccept: (target?: string) => void;
   onType: (t: FieldType) => void;
   onRemove: () => void;
-  onValue?: (v: string) => void; // "You fill" fields
   destinations: Destination[];
   onMove: (t: DropTarget) => void;
+  radio?: RadioInfo;
 }) {
   const conf = confidenceWord(field.confidence);
   const needsSigner = field.filled_by === "signer" && !field.signer_id;
@@ -94,15 +101,30 @@ export function FieldCard({
         {!field.required && <span className="text-gray-500">Optional</span>}
       </div>
 
-      {onValue && (
-        <input
-          onClick={stop}
-          onPointerDown={stop}
-          value={field.value ?? ""}
-          onChange={(e) => onValue(e.target.value)}
-          placeholder={field.type === "date" ? "e.g. 2026-10-02" : "Type the value"}
-          className="mt-2 w-full rounded border px-2 py-1 text-sm"
-        />
+      {radio && (
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-gray-700" onClick={stop} onPointerDown={stop}>
+          <span>
+            Option {radio.index + 1} of {radio.count}
+            {radio.count === 1 && <span className="text-amber-700"> (a choice needs 2+ options)</span>}
+          </span>
+          <select
+            data-testid="radio-group"
+            className="max-w-[12rem] rounded border px-1 py-0.5 text-xs"
+            value=""
+            onChange={(e) => radio.onGroup(e.target.value === "__new" ? null : e.target.value)}
+            title="Which choice this option belongs to"
+          >
+            <option value="" disabled>
+              Choice: {radio.name}
+            </option>
+            {radio.groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                Move to: {g.name}
+              </option>
+            ))}
+            <option value="__new">Make it a separate choice</option>
+          </select>
+        </div>
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={stop} onPointerDown={stop}>
@@ -121,7 +143,7 @@ export function FieldCard({
                   {s.name || s.label}
                 </option>
               ))}
-              <option value={SENDER_TARGET}>Me, before sending</option>
+              <option value={SENDER_TARGET}>Me (I fill it after Send)</option>
             </select>
           ) : (
             <button className="rounded bg-green-600 px-2 py-0.5 text-xs text-white hover:bg-green-700" onClick={() => onAccept()}>
@@ -134,7 +156,7 @@ export function FieldCard({
           onChange={(e) => onType(e.target.value as FieldType)}
           title="Change type"
         >
-          {TYPES.map((t) => (
+          {FIELD_TYPES.map((t) => (
             <option key={t} value={t}>
               {TYPE_LABEL[t]}
             </option>

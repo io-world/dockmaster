@@ -25,6 +25,8 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
   Warnings banner replaced by an expandable/minimisable "AI summary" panel (summary + notes; never dismissed).
   AI notes now refer to pages/labels instead of candidate IDs.
   Ask-the-document chat for the sender (Review panel) and signers (signing page); page links; prompt-cached; history not stored.
+  Session 3 (2026-10-03): live "You fill" value preview on the page (superseded 10-04: You fields are filled after Send); "Reset to AI suggestions" (`ai_draft` snapshot);
+  radio buttons end to end (extract `src=radio`, AI `group`, `field.group_id` column via a tiny migration in `db.py`).
 - Step 7: full journey passes against the production Docker container (`backend/scripts/e2e_journey.py`).
 - `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
 - README.md and AI_TOOLING_NOTES.md drafted.
@@ -39,7 +41,7 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
 4. **5-minute recording.** Stop adding features by Sunday 4 Oct midday.
 5. Nice-to-haves if time allows: more varied labelled test PDFs (offer letter, 3-party agreement, existing form fields).
 
-**Known gaps (accepted, logged in DECISIONS):** no radio buttons; `FORMCHECKBOX` field-code checkboxes are
+**Known gaps (accepted, logged in DECISIONS):** radio detection on scans is image-only (no OpenCV circle finder); `FORMCHECKBOX` field-code checkboxes are
 undetectable; label-only blanks on scans; the AI varies between runs on the lease (landlord alternative blocks);
 two PDFs with the same filename share an output folder in the test scripts.
 
@@ -153,7 +155,7 @@ Per page:
   "meta": {"model": "", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0, "duration_ms": 0}
 }
 ```
-- `type`: `signature | text | date | checkbox | radio`. Radio fields add `group_id` and `options` (each with its own bbox).
+- `type`: `signature | initials | text | date | checkbox | radio`. Each radio option is its own field with a shared `group_id`.
 - `placement`: `widget | line | underscore | label_offset`.
 - `source` flips to `user` when the sender adds or edits a field (correction data).
 - Fields reference signers **by ID only**, never by name.
@@ -185,8 +187,8 @@ GET  /api/sign/{token}/pages/{n}.png            POST /api/sign/{token} {values:{
 GET  /api/sign/{token}/final.pdf                GET /api/outbox
 POST /api/envelopes/{id}/ask  |  POST /api/sign/{token}/ask   {question, history} -> {answer, meta}; doc-grounded Q&A, no storage
 ```
-Field values: text/date as text; checkbox "true"/"false"; signature/initials as a PNG data URL (transparent background).
-Field types: signature | initials | date | text | checkbox (radio cut). `filled_by: sender` fields are filled in Review.
+Field values: text/date as text; checkbox/radio "true"/"false" (one "true" per radio group); signature/initials as a PNG data URL (transparent background).
+Field types: signature | initials | date | text | checkbox | radio (options share `group_id`; one owner per group). `filled_by: sender` fields are filled in Review.
 Run the pipeline synchronously in the request (spinner in UI). No background job queue.
 PyMuPDF is not thread-safe: never share a document across threads.
 
@@ -196,7 +198,9 @@ PyMuPDF is not thread-safe: never share a document across threads.
 3. In the same panel: name + email per signer, "this is me" toggle.
 4. Send — **blocked** until every field has a signer and every signer has an email.
 5. Signers open their link (**no account required**), fill only their fields, submit.
-6. If the sender is a signer, they sign right after sending, without leaving the app.
+6. Right after Send, the sender fills their part on the document ("You" fields + their own signature if "This is me");
+   their row goes first in the order, so the others are notified only when they finish. No "This is me" + You fields →
+   a "You (sender)" row is created at send.
 7. All signed → stamp final PDF → "completed" outbox entry to everyone → download.
 
 Outbox entries are clickable and contain the real signing link (no real email delivery).

@@ -35,6 +35,41 @@ export interface PreviewBox {
   title?: string;
   muted?: boolean; // e.g. other signers' fields on the signing page
   pulse?: boolean; // briefly animate (card -> box link)
+  content?: { kind: "text" | "check" | "radio"; value: string }; // preview of a filled value
+}
+
+// Same look as stamp.py: Helvetica, dark blue, largest size up to 11pt (and 75% of the box height) that fits.
+const STAMP_COLOR = "#00008c";
+const AVG_CHAR_EM = 0.5; // Helvetica's average character width, in em
+
+function fitSizePt(text: string, w: number, h: number): number {
+  for (let size = Math.max(Math.min(11, h * 0.75), 4); size >= 4; size -= 0.5) {
+    const lines = Math.ceil((text.length * AVG_CHAR_EM * size) / Math.max(w - 2, 1));
+    if (lines * size * 1.15 <= h || (lines === 1 && size <= h)) return size;
+  }
+  return 4;
+}
+
+/** What the value will look like once stamped into the PDF. */
+function BoxContent({ content, bbox, scale }: { content: NonNullable<PreviewBox["content"]>; bbox: BBox; scale: number }) {
+  const w = bbox[2] - bbox[0];
+  const h = bbox[3] - bbox[1];
+  if (content.kind === "radio")
+    return (
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="rounded-full" style={{ width: "55%", height: "55%", background: STAMP_COLOR }} />
+      </span>
+    );
+  const text = content.kind === "check" ? "X" : content.value;
+  return (
+    <span
+      data-testid="box-value"
+      className="pointer-events-none absolute inset-0 overflow-hidden break-words px-px"
+      style={{ color: STAMP_COLOR, fontFamily: "Helvetica, Arial, sans-serif", fontSize: fitSizePt(text, w, h) * scale, lineHeight: 1.15 }}
+    >
+      {text}
+    </span>
+  );
 }
 
 function PageView({
@@ -100,7 +135,7 @@ function PageView({
           const hi = highlighted.has(b.id);
           const style = {
             border: `${hi ? 3 : 2}px ${b.dashed ? "dashed" : "solid"} ${b.color}`,
-            background: b.muted ? "rgba(148,163,184,0.15)" : `${b.color}14`,
+            background: b.muted ? "rgba(148,163,184,0.15)" : b.content ? "rgba(255,255,255,0.35)" : `${b.color}14`,
             opacity: b.muted ? 0.5 : 1,
             boxShadow: hi ? `0 0 0 3px ${b.color}55` : undefined,
           };
@@ -138,6 +173,7 @@ function PageView({
                 }
               >
                 <div data-box-id={b.id} title={b.title} className="h-full w-full cursor-move" onClick={() => onBoxClick?.(b.id)}>
+                  {b.content && <BoxContent content={b.content} bbox={b.bbox} scale={scale} />}
                   {tag}
                 </div>
               </Rnd>
@@ -152,6 +188,7 @@ function PageView({
               className={`absolute ${onBoxClick ? "cursor-pointer" : ""} ${hi ? "z-10" : ""} ${b.pulse ? "box-pulse" : ""}`}
               style={{ left: r.left, top: r.top, width: r.width, height: r.height, ...style }}
             >
+              {b.content && <BoxContent content={b.content} bbox={b.bbox} scale={scale} />}
               {b.label && (
                 <span
                   className="pointer-events-none absolute -top-3.5 left-0 whitespace-nowrap rounded-sm px-0.5 text-[9px] leading-[14px] text-white"

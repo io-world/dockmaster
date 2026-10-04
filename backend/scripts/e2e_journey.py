@@ -5,8 +5,8 @@
 
 First run only: PLAYWRIGHT_BROWSERS_PATH=.venv/playwright-browsers uv run playwright install chromium
 
-Steps: sign up -> upload -> review (fill signers, resolve Needs review, fill "You fill" values, first signer is
-"This is me") -> send -> sign as sender (typed signature) -> open the other signers' links from the Outbox in
+Steps: sign up -> upload -> review (fill signers, resolve Needs review, first signer is "This is me") -> send ->
+sender fills their part and signs (typed signature) -> open the other signers' links from the Outbox in
 separate logged-out browsers (drawn signatures) -> status shows completed -> download the signed PDF.
 Uses a real AI call (one per run). Screenshots and signed.pdf are written to the output folder.
 Creates the account tester@example.test, so run it against an empty data volume.
@@ -52,7 +52,7 @@ with sync_playwright() as p:
     pg.wait_for_url("**/envelopes/*", timeout=180000); pg.wait_for_selector("[data-testid=send]"); pg.wait_for_selector("[data-box-id]")
     step(f"review: {pg.locator('h1').inner_text()} — {pg.locator('[data-box-id]').count()} boxes, checklist: {pg.locator('[data-testid=checklist-toggle]').inner_text()}")
     pg.screenshot(path=f"{OUT}/1_review.png")
-    # 3. review like a user: fill signers, resolve Needs review, fill 'You fill' values
+    # 3. review like a user: fill signers, resolve Needs review ("You" fields are filled on the page after Send)
     signers = pg.locator("[data-testid^=col-s]:not([data-testid=col-sender])").all()
     names = []
     for i, col in enumerate(signers):
@@ -68,8 +68,6 @@ with sync_playwright() as p:
         if sel.count(): sel.select_option(index=1)
         else: card.locator("button", has_text="Looks right").click()
         pg.wait_for_timeout(50)
-    for inp in pg.locator("[data-testid=col-sender] input").all():
-        if not inp.input_value(): inp.fill("Example value")
     pg.wait_for_function("() => document.querySelector('[data-testid=save-status]').innerText.includes('All changes saved')", timeout=15000)
     step(f"reviewed: {pg.locator('[data-testid=save-status]').inner_text()}; checklist: {pg.locator('[data-testid=checklist-toggle]').inner_text()}")
     pg.screenshot(path=f"{OUT}/2_ready.png")

@@ -72,18 +72,19 @@ class FieldRow(SQLModel, table=True):
     key: str
     signer_key: str | None = None
     filled_by: str = "signer"  # signer | sender
-    type: str = "text"  # signature | initials | date | text | checkbox
+    type: str = "text"  # signature | initials | date | text | checkbox | radio
+    group_id: str | None = None  # radio only: options of one choice share it ("g1"); exactly one is picked
     label: str = ""
     description: str = ""
     page: int = 1
     bbox: list = Field(default_factory=list, sa_column=Column(JSON))
     required: bool = True
     candidate_id: str | None = None
-    placement: str = "user"  # widget | line | underscore | label_offset | checkbox | user
+    placement: str = "user"  # widget | line | underscore | label_offset | checkbox | radio | user
     confidence: float | None = None
     reason: str = ""
     source: str = "ai"  # ai | user
-    value: str | None = None  # text/date: the text; checkbox: "true"/"false"; signature/initials: PNG data URL
+    value: str | None = None  # text/date: the text; checkbox/radio: "true"/"false"; signature/initials: PNG data URL
 
 
 class OutboxEmail(SQLModel, table=True):

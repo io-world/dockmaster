@@ -7,6 +7,7 @@ In Docker, DATA_DIR points at the persistent volume.
 import os
 from pathlib import Path
 
+from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
@@ -25,6 +26,20 @@ def init_db() -> None:
     from . import models  # noqa: F401  (register tables)
 
     SQLModel.metadata.create_all(engine)
+    _add_missing_columns()
+
+
+# Columns added after the first release. create_all never alters existing tables, so add them by hand.
+NEW_COLUMNS = {"field": {"group_id": "VARCHAR"}}
+
+
+def _add_missing_columns() -> None:
+    with engine.begin() as conn:
+        for table, cols in NEW_COLUMNS.items():
+            have = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            for name, sqltype in cols.items():
+                if name not in have:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sqltype}"))
 
 
 def get_session():

@@ -29,14 +29,16 @@ The dev server also listens on your network, so you can test on a phone at `http
 - **Upload any PDF:** digital, scanned, rotated, or with mixed page sizes (Letter, A4, Legal, landscape).
 - **AI proposal:**
   - the parties, and one signer per signature block (optional signers such as "Guarantor (if applicable)" are marked);
-  - every field's type (signature / initials / date / text / checkbox) and owner;
-  - fields the **sender** fills before sending (rent, party names in the preamble);
+  - every field's type (signature / initials / date / text / checkbox / radio) and owner, with radio options grouped into
+    choices ("pick one");
+  - fields the **sender** fills (rent, party names in the preamble), shown under **You**;
   - blanks that are **not** fields (table borders, underlined headings), each with a reason;
   - fields it expected but couldn't find.
 - **Review screen:**
-  - collapsible sections for **Needs review** (low confidence, guessed position, or no signer), **You fill**, one per signer, and **Not a field**;
+  - collapsible sections for **Needs review** (low confidence, guessed position, or no signer), **You** (merged into your own signer section when you tick "This is me"), one per signer, and **Not a field**;
   - a sticky drop bar: drag a card onto a destination chip (or use "Move to…"), and move or resize boxes on the page;
   - add fields, add or remove signers;
+  - **Reset to AI suggestions** undoes your field and assignment changes (keeps signer names and emails);
   - clicking a card finds its box, and clicking a box finds its card;
   - autosave;
   - a send checklist (hard rules block Send; Needs review can be overridden with "Send anyway").
@@ -44,7 +46,10 @@ The dev server also listens on your network, so you can test on a phone at `http
   - no account needed;
   - only your own fields are active, with "Next field";
   - draw a signature, or type your name in a script font;
-  - dates are prefilled.
+  - the sender fills their part (preamble blanks, their own signature) on the document right after Send, and the
+    others are notified only when they finish;
+  - dates are prefilled;
+  - radio choices allow exactly one option, and Finish waits until each required choice is answered.
 - **Ask about the document:** the sender (in Review) and each signer (on their signing page) can ask questions. Answers come only from the document, with clickable page references. They aren't legal advice, and the conversation isn't stored.
 - **Completion:** signatures and values are stamped into the PDF; status and outbox notifications are kept; the signed PDF downloads.
 - **Inbox:** every document with its status and "1 of 2 signed"; delete a document (with confirmation; signing links for sent documents stop working).
@@ -59,7 +64,6 @@ The dev server also listens on your network, so you can test on a phone at `http
 - **Signatures:** images stamped onto the PDF. No digital certificates, audit trail or legal-compliance features.
 
 ## What's cut (details and reasons in [DECISIONS.md](DECISIONS.md))
-- Radio-button groups.
 - An OCR engine: scanned pages are read by Claude from the page images instead.
 - Splitting long documents across several AI calls (one call handles 18+ pages).
 - Word field codes such as `FORMCHECKBOX` that leaked into the PDF as text with nothing drawn: there's no geometry to place them on.
@@ -69,7 +73,7 @@ The dev server also listens on your network, so you can test on a phone at `http
 ## How the AI layer works
 **Libraries decide WHERE. Claude decides WHAT and WHO.** Claude never outputs coordinates.
 1. **`extract.py`:** PyMuPDF and OpenCV find every *candidate* blank (typed underscores, drawn lines, existing form
-   widgets, checkboxes, lines in scanned images, and spots after labels like "Date:"). It records nearby labels, the
+   widgets, checkboxes, round radio markers, lines in scanned images, and spots after labels like "Date:"). It records nearby labels, the
    heading in the same column, the line's text, and whether a line looks like a table border.
 2. **`propose.py`:** one Claude call (`claude-sonnet-5-5`) with:
    - all the page text;

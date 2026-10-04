@@ -9,7 +9,7 @@ Ground truth lives next to each PDF: backend/test_pdfs/<name>.labels.json. Field
 (PyMuPDF points, top-left origin), not candidate ID, so labels survive changes to extraction.
 
 Label field keys:
-    page, bbox, label, type (signature|initials|date|text|checkbox), filled_by (signer|sender),
+    page, bbox, label, type (signature|initials|date|text|checkbox|radio), filled_by (signer|sender),
     signer (a key from "signers", or null for sender fields), required,
     owner_any (true when the document is genuinely ambiguous about who fills it: only detection + type are scored)
 

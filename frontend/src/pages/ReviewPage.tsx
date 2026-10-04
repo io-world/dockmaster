@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, type Draft, type EnvelopeDetail, type FieldType } from "../api";
+import { api, ApiError, type Draft, type EnvelopeDetail, type Field, type FieldType } from "../api";
 import Layout from "../components/Layout";
 import PdfPreview, { type PageClick, type PreviewBox } from "../components/PdfPreview";
 import { ConfirmDialog, ErrorBox, Spinner } from "../components/ui";
 import DocChat from "../components/DocChat";
 import Board from "../review/Board";
 import { checklist, type Checklist } from "../review/checklist";
-import { addField, DEFAULT_SIZE, moveFieldBox, newFieldId, SENDER_TARGET, type DraftUpdate } from "../review/draft";
-import { boxTag, fieldColor, needsReview, TYPE_LABEL } from "../review/model";
-
-const TYPES: FieldType[] = ["signature", "initials", "date", "text", "checkbox"];
+import { addField, DEFAULT_SIZE, moveFieldBox, newFieldId, newGroupId, resetToAi, SENDER_TARGET, type DraftUpdate } from "../review/draft";
+import { boxTag, FIELD_TYPES, fieldColor, groupName, needsReview, radioGroup, TYPE_LABEL } from "../review/model";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
@@ -58,16 +56,26 @@ function ChecklistPanel({ list }: { list: Checklist }) {
 function AddFieldPopover({
   at,
   signers,
+  fields,
   onAdd,
   onCancel,
 }: {
   at: PageClick;
   signers: Draft["signers"];
-  onAdd: (type: FieldType, target: string) => void;
+  fields: Field[];
+  onAdd: (type: FieldType, target: string, groupId: string | null) => void;
   onCancel: () => void;
 }) {
   const [type, setType] = useState<FieldType>("signature");
   const [target, setTarget] = useState(signers[0]?.id ?? SENDER_TARGET);
+  const [group, setGroup] = useState<string>(""); // "" = a new choice
+  // Radio: join an existing choice on this page (it keeps that choice's owner) or start a new one.
+  const choices = useMemo(() => {
+    const seen = new Map<string, Field>();
+    for (const f of fields) if (f.type === "radio" && f.group_id && f.page === at.page && !seen.has(f.group_id)) seen.set(f.group_id, f);
+    return [...seen].map(([id, f]) => ({ id, name: groupName(radioGroup(fields, f)) }));
+  }, [fields, at.page]);
+  const joining = type === "radio" && group !== "";
   const left = Math.min(at.clientX + 8, window.innerWidth - 260);
   const top = Math.min(at.clientY + 8, window.innerHeight - 170);
   return (
@@ -76,14 +84,27 @@ function AddFieldPopover({
       <label className="block">
         Type
         <select value={type} onChange={(e) => setType(e.target.value as FieldType)} className="mt-0.5 w-full rounded border px-1 py-1">
-          {TYPES.map((t) => (
+          {FIELD_TYPES.map((t) => (
             <option key={t} value={t}>
               {TYPE_LABEL[t]}
             </option>
           ))}
         </select>
       </label>
-      <label className="block">
+      {type === "radio" && (
+        <label className="block">
+          Choice
+          <select data-testid="add-radio-group" value={group} onChange={(e) => setGroup(e.target.value)} className="mt-0.5 w-full rounded border px-1 py-1">
+            <option value="">New choice</option>
+            {choices.map((c) => (
+              <option key={c.id} value={c.id}>
+                Add to: {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className={`block ${joining ? "hidden" : ""}`}>
         Who fills it
         <select value={target} onChange={(e) => setTarget(e.target.value)} className="mt-0.5 w-full rounded border px-1 py-1">
           {signers.map((s) => (
@@ -91,14 +112,14 @@ function AddFieldPopover({
               {s.name || s.label}
             </option>
           ))}
-          <option value={SENDER_TARGET}>Me, before sending</option>
+          <option value={SENDER_TARGET}>Me (I fill it after Send)</option>
         </select>
       </label>
       <div className="flex justify-end gap-2">
         <button className="rounded border px-2 py-1" onClick={onCancel}>
           Cancel
         </button>
-        <button className="rounded bg-blue-600 px-2 py-1 text-white" onClick={() => onAdd(type, target)}>
+        <button className="rounded bg-blue-600 px-2 py-1 text-white" onClick={() => onAdd(type, target, type === "radio" ? group || newGroupId() : null)}>
           Add field
         </button>
       </div>
@@ -140,6 +161,7 @@ export default function ReviewPage({ id }: { id: number }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showChecklist, setShowChecklist] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<{ message: string; problems: string[] } | null>(null);
   const draftRef = useRef<Draft | null>(null);
@@ -148,19 +170,22 @@ export default function ReviewPage({ id }: { id: number }) {
   const inFlight = useRef<Promise<void> | null>(null);
   const [pending, setPending] = useState<PageClick | null>(null);
 
-  const createField = (type: FieldType, target: string) => {
+  const createField = (type: FieldType, target: string, groupId: string | null) => {
     if (!pending || !env) return;
     const page = env.pages.find((p) => p.n === pending.page)!;
     const [w, h] = DEFAULT_SIZE[type];
     const x0 = Math.max(0, Math.min(pending.point[0], page.width - w));
     const y0 = Math.max(0, Math.min(pending.point[1] - h / 2, page.height - h)); // click = vertical middle
     const id = newFieldId();
+    // Joining an existing choice: take its owner, so one choice never has two owners.
+    const owner = groupId ? draft?.fields.find((f) => f.type === "radio" && f.group_id === groupId) : undefined;
     apply(
       addField({
         id,
-        signer_id: target === SENDER_TARGET ? null : target,
-        filled_by: target === SENDER_TARGET ? "sender" : "signer",
+        signer_id: owner ? owner.signer_id : target === SENDER_TARGET ? null : target,
+        filled_by: owner ? owner.filled_by : target === SENDER_TARGET ? "sender" : "signer",
         type,
+        group_id: groupId,
         label: "",
         description: "",
         page: page.n,
@@ -337,6 +362,15 @@ export default function ReviewPage({ id }: { id: number }) {
           <h1 className="font-semibold">{env.filename}</h1>
           {env.doc_type && <span className="text-sm text-gray-500">{env.doc_type}</span>}
           <div className="ml-auto flex items-center gap-3">
+            <button
+              data-testid="reset-ai"
+              onClick={() => setConfirmReset(true)}
+              disabled={!env.ai_draft}
+              title={env.ai_draft ? "Undo your changes to fields and who fills them" : "Only available for documents uploaded after this update"}
+              className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Reset to AI suggestions
+            </button>
             <SaveStatus state={saveState} error={saveError} onRetry={() => flush().catch(() => {})} />
             {list && (
               <div className="relative">
@@ -458,8 +492,28 @@ export default function ReviewPage({ id }: { id: number }) {
               onCancel={() => setConfirmSend(false)}
             />
           )}
+          {confirmReset && env.ai_draft && (
+            <ConfirmDialog
+              text={
+                <>
+                  Undo all your changes to fields and who fills them? Every box goes back to the AI's suggestion: its
+                  signer, type and position. Removed fields come back and fields you added are deleted. Signer names,
+                  emails and "You fill" values are kept.
+                </>
+              }
+              confirm="Reset"
+              danger
+              onConfirm={() => {
+                apply(resetToAi(env.ai_draft!));
+                setConfirmReset(false);
+                setSelectedId(null);
+                setActiveSignerId(null);
+              }}
+              onCancel={() => setConfirmReset(false)}
+            />
+          )}
           {pending && (
-            <AddFieldPopover at={pending} signers={draft.signers} onAdd={createField} onCancel={() => setPending(null)} />
+            <AddFieldPopover at={pending} signers={draft.signers} fields={draft.fields} onAdd={createField} onCancel={() => setPending(null)} />
           )}
         </div>
       </div>

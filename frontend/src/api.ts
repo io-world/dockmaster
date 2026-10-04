@@ -1,7 +1,7 @@
 // The only module that talks to the backend. Components never call fetch directly.
 // Shapes mirror backend/app/api.py (the source of truth). All bboxes are PDF points, origin top-left.
 
-export type FieldType = "signature" | "initials" | "date" | "text" | "checkbox";
+export type FieldType = "signature" | "initials" | "date" | "text" | "checkbox" | "radio";
 export type EnvelopeStatus = "draft" | "sent" | "completed";
 export type BBox = [number, number, number, number];
 
@@ -57,6 +57,7 @@ export interface Field {
   signer_id: string | null;
   filled_by: "signer" | "sender";
   type: FieldType;
+  group_id?: string | null; // radio only: options of one choice share it; exactly one is picked
   label: string;
   description: string;
   page: number;
@@ -67,7 +68,7 @@ export interface Field {
   confidence: number | null;
   reason: string;
   source: "ai" | "user";
-  value: string | null;
+  value: string | null; // checkbox/radio: "true" | "false"
 }
 
 export interface Rejected {
@@ -99,6 +100,7 @@ export interface EnvelopeDetail {
   signers: Signer[];
   fields: Field[];
   rejected: Rejected[];
+  ai_draft: Draft | null; // the AI's untouched proposal (null for older envelopes)
   missing_fields: MissingField[];
   warnings: string[];
   ai: { ok: boolean; model: string | null; cost_usd: number | null; duration_ms: number | null };
@@ -166,9 +168,19 @@ export interface EnvelopeStatusView {
 
 export interface SigningView {
   envelope: { filename: string; doc_type: string | null; status: EnvelopeStatus; sender_email: string | null };
-  signer: { id: string; label: string; name: string | null; email: string | null; status: string; signed_at: string | null };
+  signer: {
+    id: string;
+    label: string;
+    name: string | null;
+    email: string | null;
+    status: string;
+    signed_at: string | null;
+    is_self: boolean; // the sender: fills their part first, then the others are notified
+    envelope_id: number | null; // only for the sender (link back to the Status page)
+  };
   can_sign: boolean;
   waiting_for_others: boolean;
+  others_wait_for_me: boolean;
   pages: Page[];
   fields: Field[];
   others: { page: number; bbox: BBox; type: FieldType }[];

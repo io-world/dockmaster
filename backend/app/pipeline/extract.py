@@ -30,6 +30,7 @@ IMAGE_PAGE_FRAC = 0.5  # an image covering this much of the page => also look fo
 
 UNDERSCORE_RE = re.compile(r"_{3,}")
 CHECKBOX_GLYPHS = {"☐", "□", "❏", "❑"}  # ☐ □ ❏ ❑
+RADIO_GLYPHS = {"○", "◯", "⚪", "❍", "◦"}  # round option markers; Claude rejects the ones used as list bullets
 LABEL_WORDS = r"(signature|signed|sign|by|name|print(ed)? name|title|its|date|dated|initials?|email|phone|fax|address)"
 LABEL_COLON_RE = re.compile(rf"^{LABEL_WORDS}\s*:$", re.IGNORECASE)
 LABEL_BARE_RE = re.compile(rf"^{LABEL_WORDS}$", re.IGNORECASE)  # only when alone on its row
@@ -40,7 +41,7 @@ class Candidate:
     id: str
     page: int  # 1-based
     bbox: list[float]  # [x0, y0, x1, y1] points, top-left origin
-    src: str  # widget | underscore | line | scan_line | checkbox | label_offset
+    src: str  # widget | underscore | line | scan_line | checkbox | radio | label_offset
     left_label: str = ""
     above_label: str = ""
     below_label: str = ""
@@ -211,6 +212,37 @@ def _checkbox_squares(page: pymupdf.Page, words: list[Word]) -> list[list[float]
         if not any(_intersects(b, o) for o in out):
             out.append(b)
     return out
+
+
+def _radio_marks(page: pymupdf.Page, words: list[Word]) -> list[list[float]]:
+    """Round option markers: radio glyphs (alone or stuck to their label, e.g. "○Yes") and small drawn circles."""
+    boxes = []
+    for w in words:
+        t = w.text.strip()
+        if t and t[0] in RADIO_GLYPHS:
+            cw = (w.bbox[2] - w.bbox[0]) / max(len(t), 1)  # the glyph's width (it may be glued to its label)
+            side = max(cw, 6.0)
+            cx, cy = w.bbox[0] + cw / 2, w.bbox[1] + 0.6 * (w.bbox[3] - w.bbox[1])  # glyphs sit below mid-line
+            boxes.append([cx - side / 2, cy - side / 2, cx + side / 2, cy + side / 2])
+    for d in page.get_drawings():
+        r = d["rect"]
+        items = d["items"]
+        # A drawn circle is a closed path of curves only (usually 4 beziers), roughly square, checkbox-sized.
+        if items and all(it[0] == "c" for it in items) and 6 <= r.width <= 16 and abs(r.width - r.height) < 2:
+            boxes.append([r.x0, r.y0, r.x1, r.y1])
+    out = []
+    for b in sorted(boxes, key=lambda b: (round(b[1]), b[0])):
+        if not any(_intersects(b, o) for o in out):
+            out.append(b)
+    return out
+
+
+def _option_label(b: list[float], row: list[Word], stops: list[list[float]]) -> str:
+    """Text to the right of an option marker, up to the next marker on the same row."""
+    nxt = min((o[0] for o in stops if o[0] > b[2] + 1 and _same_row(o, b)), default=float("inf"))
+    # bbox[0] >= b[0] - 1 (not b[2]) keeps a label glued to its glyph ("○Yes"); the glyph is stripped below.
+    words = [w.text for w in row if w.bbox[0] >= b[0] - 1 and w.bbox[2] > b[2] + 1 and w.bbox[2] <= nxt + 1]
+    return " ".join(words).lstrip("".join(RADIO_GLYPHS))[:80].strip()
 
 
 def _scan_lines(page: pymupdf.Page) -> list[list[float]]:
@@ -401,12 +433,23 @@ def extract(pdf_path: str | Path, image_dir: str | Path | None = None) -> Extrac
 
         # 1. Existing widgets: highest trust, taken as-is.
         widget_boxes = []
-        for wd in page.widgets() or []:
+        widgets = list(page.widgets() or [])
+        option_boxes = [[w.rect.x0, w.rect.y0, w.rect.x1, w.rect.y1] for w in widgets
+                        if w.field_type_string in ("RadioButton", "CheckBox")]
+        for wd in widgets:
             r = wd.rect
-            widget_boxes.append([r.x0, r.y0, r.x1, r.y1])
-            add(pno, [r.x0, r.y0, r.x1, r.y1], "widget",
-                left_label=_left_label([r.x0, r.y0, r.x1, r.y1], next((rw for rw in rows if _same_row(_row_bbox(rw), [0, r.y0, 0, r.y1])), [])),
-                widget={"name": wd.field_name, "type": wd.field_type_string, "value": wd.field_value})
+            b = [r.x0, r.y0, r.x1, r.y1]
+            widget_boxes.append(b)
+            row = next((rw for rw in rows if _same_row(_row_bbox(rw), [0, r.y0, 0, r.y1])), [])
+            info = {"name": wd.field_name, "type": wd.field_type_string, "value": wd.field_value}
+            if wd.field_type_string in ("RadioButton", "CheckBox"):  # their label is usually to the right
+                info["option_label"] = _option_label(b, row, option_boxes)
+                if wd.field_type_string == "RadioButton":
+                    try:
+                        info["option"] = wd.on_state()  # the option's export value; options share `name`
+                    except Exception:
+                        pass
+            add(pno, b, "widget", left_label=_left_label(b, row), widget=info)
 
         # 2. Geometry: underscores, then drawn/scanned lines (deduped against underscores).
         found: list[tuple[list[float], str]] = []
@@ -458,6 +501,16 @@ def extract(pdf_path: str | Path, image_dir: str | Path | None = None) -> Extrac
             row = next((r for r in rows if _same_row(_row_bbox(r), b)), [])
             right = " ".join(w.text for w in row if w.bbox[0] >= b[2] - 1)[:80]
             c = add(pno, b, "checkbox", left_label=right, heading=_heading(b, rows))
+            c.line_text = _line_text(b, row, c.id)
+            page_cands.append(b)
+
+        # 3b. Radio options (round markers). Grouping into questions is Claude's job.
+        radios = [b for b in _radio_marks(page, words)
+                  if not any(_intersects(b, o) for o in widget_boxes + page_cands)]
+        for b in radios:
+            row = next((r for r in rows if _same_row(_row_bbox(r), b)), [])
+            c = add(pno, b, "radio", left_label=_option_label(b, row, radios), heading=_heading(b, rows),
+                    above_label=_band_text(b, rows, below=False, max_gap=24))
             c.line_text = _line_text(b, row, c.id)
             page_cands.append(b)
 

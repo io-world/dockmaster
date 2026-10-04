@@ -32,3 +32,10 @@ backend/test_pdfs/*.labels.json
 
 # Build artifacts
 *.tsbuildinfo
+
+# Personal working notes (never published)
+/NOTES.MD
+/NOTES.md
+
+# Everything under test_pdfs (incl. subfolders and zips) stays local
+backend/test_pdfs/

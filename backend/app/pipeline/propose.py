@@ -38,7 +38,7 @@ PRICES = {
 }
 LOG_PATH = Path(__file__).resolve().parents[2] / "out" / "llm_calls.jsonl"
 
-FieldType = Literal["signature", "initials", "date", "text", "checkbox"]
+FieldType = Literal["signature", "initials", "date", "text", "checkbox", "radio"]
 
 
 # ---------- what Claude returns (no coordinates anywhere) ----------
@@ -73,6 +73,9 @@ class FieldAssignment(BaseModel):
     required: bool
     confidence: float = Field(ge=0, le=1)
     reason: str = Field(description="One sentence of evidence: heading, label, position")
+    group: str | None = Field(
+        description="Radio options only: options of one question (choose one) share a group id, e.g. 'g1', 'g2'. "
+                    "Null for every other type")
 
 
 class Rejection(BaseModel):
@@ -115,7 +118,8 @@ in the document text, so trust x positions and the images over reading order.
    - A signature, its printed name and its date form one block and belong to the same signer. The field's \
 description must name the same signer it is assigned to.
    - type: signature for Signed/Signature/By lines; initials for Initials boxes; date for Date lines; \
-checkbox for check boxes; text for everything else (names, titles, addresses, amounts).
+checkbox for check boxes (each can be ticked on its own); radio for options where exactly one is chosen (round markers, src=radio, and RadioButton widgets); text for everything else (names, titles, addresses, amounts).
+   - Radio: give every option of one question the same `group` (g1, g2, ...), one field per option, with the option's own text as its label (e.g. 'Monthly') and the question in its description. RadioButton widgets that share a widget name are one group. All options of a group belong to the same signer (or all to the sender). Square boxes where several answers can apply stay checkboxes. Reject round markers used as list bullets.
    - filled_by='sender' for blanks that should be completed before the document is sent: party names in \
 the preamble, effective/start dates, rent or fee amounts, property details. filled_by='signer' for what each \
 signer provides: their signature, printed name, title, signing date, initials, their own contact details.
@@ -270,6 +274,7 @@ def _validate(ex: Extraction, cp: ClaudeProposal) -> list[str]:
         seen.add(f.candidate_id)
         kept_fields.append(f)
     cp.fields = kept_fields
+    warnings += _fix_radio_groups(cp, by_id)
 
     cp.rejected = [r for r in cp.rejected if r.candidate_id in cand_ids and r.candidate_id not in seen]
     seen |= {r.candidate_id for r in cp.rejected}
@@ -277,7 +282,8 @@ def _validate(ex: Extraction, cp: ClaudeProposal) -> list[str]:
     for c in ex.candidates:
         if c.id not in seen:
             cp.fields.append(FieldAssignment(
-                candidate_id=c.id, signer_id=None, filled_by="signer", type="text",
+                candidate_id=c.id, signer_id=None, filled_by="signer", type="radio" if c.src == "radio" else "text",
+                group=f"own-{c.id}" if c.src == "radio" else None,
                 label=c.left_label or c.above_label or "", description="Unclassified blank",
                 required=False, confidence=0.0, reason="Not classified by AI"))
             warnings.append(f"The AI didn't classify {_describe(c)}; it's in Needs review for you to decide")
@@ -289,6 +295,29 @@ def _validate(ex: Extraction, cp: ClaudeProposal) -> list[str]:
     for p in cp.parties:
         if not any(s.party_id == p.id for s in cp.signers):
             warnings.append(f"Party '{p.name or p.role}' has no signer")
+    return warnings
+
+
+def _fix_radio_groups(cp: ClaudeProposal, by_id: dict[str, Candidate]) -> list[str]:
+    """Radio options need a group, and a group has one owner: the first option's (in reading order)."""
+    warnings: list[str] = []
+    groups: dict[str, list[FieldAssignment]] = {}
+    for f in cp.fields:
+        if f.type != "radio":
+            f.group = None
+            continue
+        f.group = f.group or f"own-{f.candidate_id}"  # an ungrouped option is a group of its own
+        groups.setdefault(f.group, []).append(f)
+    for opts in groups.values():
+        opts.sort(key=lambda f: (by_id[f.candidate_id].page, by_id[f.candidate_id].bbox[1], by_id[f.candidate_id].bbox[0]))
+        first = opts[0]
+        if any((f.signer_id, f.filled_by) != (first.signer_id, first.filled_by) for f in opts[1:]):
+            warnings.append(f"The AI gave the options of one choice ({_describe(by_id[first.candidate_id])}) to different "
+                            "people; they're all given to the first option's owner")
+            for f in opts[1:]:
+                f.signer_id, f.filled_by, f.confidence = first.signer_id, first.filled_by, min(f.confidence, 0.5)
+        if len(opts) == 1:
+            first.confidence = min(first.confidence, 0.5)  # a one-option choice is suspicious: review it
     return warnings
 
 

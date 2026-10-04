@@ -44,6 +44,9 @@ def stamp(pdf_path: str | Path, fields: list[dict], out_path: str | Path) -> Pat
             page.insert_image(rect, stream=_png_bytes(value), keep_proportion=True, overlay=True)
         elif f["type"] == "checkbox":
             _fit_text(page, rect, "X")
+        elif f["type"] == "radio":  # the chosen option: a filled dot in the middle of the marker
+            page.draw_circle(rect.tl + (rect.br - rect.tl) / 2, min(rect.width, rect.height) * 0.3,
+                             color=(0, 0, 0.55), fill=(0, 0, 0.55), overlay=True)
         else:
             _fit_text(page, rect, str(value))
     out_path = Path(out_path)

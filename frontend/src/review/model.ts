@@ -27,12 +27,15 @@ export function fieldColor(f: Field, signers: Signer[]): string {
   return f.filled_by === "sender" ? SENDER_COLOR : signerColor(signers, f.signer_id);
 }
 
+export const FIELD_TYPES: FieldType[] = ["signature", "initials", "date", "text", "checkbox", "radio"];
+
 export const TYPE_LABEL: Record<FieldType, string> = {
   signature: "Signature",
   initials: "Initials",
   date: "Date",
   text: "Text",
   checkbox: "Checkbox",
+  radio: "Radio option",
 };
 
 export const TYPE_ICON: Record<FieldType, string> = {
@@ -41,7 +44,24 @@ export const TYPE_ICON: Record<FieldType, string> = {
   date: "📅",
   text: "T",
   checkbox: "☑",
+  radio: "◉",
 };
+
+/** The options of a field's radio group, in reading order (just the field itself if it isn't a radio). */
+export function radioGroup(fields: Field[], f: Field): Field[] {
+  if (f.type !== "radio" || !f.group_id) return [f];
+  return fields
+    .filter((x) => x.type === "radio" && x.group_id === f.group_id)
+    .sort((a, b) => a.page - b.page || a.bbox[1] - b.bbox[1] || a.bbox[0] - b.bbox[0]);
+}
+
+/** A short name for a radio group: its question, or its options. */
+export function groupName(options: Field[]): string {
+  const q = options.find((o) => o.description)?.description;
+  if (q) return q;
+  const labels = options.map((o) => o.label).filter(Boolean);
+  return labels.length ? labels.join(" / ") : "Unnamed choice";
+}
 
 /** Short tag for a signer: name initial once a name is entered, otherwise its number (1, 2, …). */
 export function signerTag(signers: Signer[], f: Field): string {

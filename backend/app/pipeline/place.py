@@ -9,7 +9,7 @@ from .extract import Extraction
 
 MIN_HEIGHT = {"signature": 24.0, "initials": 18.0, "date": 14.0, "text": 14.0}
 PLACEMENT = {"widget": "widget", "underscore": "underscore", "line": "line", "scan_line": "line",
-             "checkbox": "checkbox", "label_offset": "label_offset"}
+             "checkbox": "checkbox", "radio": "radio", "label_offset": "label_offset"}
 REVIEW_BELOW = 0.6
 
 
@@ -19,7 +19,7 @@ def _size(bbox: list[float], ftype: str, src: str, rotation: int = 0) -> list[fl
     "Above the line" depends on page rotation: up for 0, +x for 90, down for 180, -x for 270 (display space).
     Widgets and checkboxes keep their exact rects.
     """
-    if src in ("widget", "checkbox") or ftype == "checkbox":
+    if src in ("widget", "checkbox", "radio") or ftype in ("checkbox", "radio"):
         return bbox
     x0, y0, x1, y1 = bbox
     need = MIN_HEIGHT.get(ftype, 14.0)
@@ -49,6 +49,7 @@ def place(ex: Extraction, proposed: dict) -> dict:
                 "name": None, "email": None, "is_self": False, "order": s["order"], "required": s["required"],
                 "confidence": s["confidence"], "reason": s["reason"]} for s in cp["signers"]]
 
+    group_map: dict[str, str] = {}  # Claude's radio group names -> g1, g2, ... in reading order
     fields = []
     for f in sorted(cp["fields"], key=lambda f: (cands[f["candidate_id"]].page, cands[f["candidate_id"]].bbox[1],
                                                  cands[f["candidate_id"]].bbox[0])):
@@ -59,6 +60,7 @@ def place(ex: Extraction, proposed: dict) -> dict:
             "signer_id": signer_map.get(f["signer_id"]) if f["signer_id"] else None,
             "filled_by": f["filled_by"],
             "type": f["type"],
+            "group_id": group_map.setdefault(f["group"], f"g{len(group_map) + 1}") if f.get("group") else None,
             "label": f["label"],
             "description": f["description"],
             "page": c.page,
@@ -99,11 +101,17 @@ def fallback_proposal(ex: Extraction, error: str) -> dict:
     """Used when the AI step fails: every detected blank becomes an unassigned field, so the sender can still
     finish the envelope by hand. Same shape as place()."""
     fields = []
+    groups: dict[tuple, str] = {}
     for c in sorted(ex.candidates, key=lambda c: (c.page, c.bbox[1], c.bbox[0])):
-        ftype = "checkbox" if c.src == "checkbox" else "text"
+        radio = c.src == "radio" or (c.widget or {}).get("type") == "RadioButton"
+        ftype = "radio" if radio else "checkbox" if c.src == "checkbox" else "text"
+        # Without the AI, radio options are grouped by widget name, else by page row.
+        gkey = (c.page, c.widget["name"]) if c.widget else (c.page, round(c.bbox[1] / 4))
         fields.append({
             "id": f"f{len(fields) + 1}", "signer_id": None, "filled_by": "signer", "type": ftype,
-            "label": c.left_label or c.above_label or c.below_label or "", "description": "",
+            "group_id": groups.setdefault(gkey, f"g{len(groups) + 1}") if radio else None,
+            "label": (c.widget or {}).get("option_label") or c.left_label or c.above_label or c.below_label or "",
+            "description": "",
             "page": c.page, "bbox": _size(c.bbox, ftype, c.src), "required": True, "candidate_id": c.id,
             "placement": PLACEMENT.get(c.src, c.src), "confidence": 0.0,
             "reason": "AI step unavailable; assign this field by hand", "needs_review": True,

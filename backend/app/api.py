@@ -34,7 +34,7 @@ from .pipeline.stamp import stamp
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
 
-FIELD_TYPES = {"signature", "initials", "date", "text", "checkbox"}
+FIELD_TYPES = {"signature", "initials", "date", "text", "checkbox", "radio"}
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 @asynccontextmanager
@@ -82,7 +82,8 @@ def _signer_json(s: Signer) -> dict:
 
 
 def _field_json(f: FieldRow) -> dict:
-    return {"id": f.key, "signer_id": f.signer_key, "filled_by": f.filled_by, "type": f.type, "label": f.label,
+    return {"id": f.key, "signer_id": f.signer_key, "filled_by": f.filled_by, "type": f.type,
+            "group_id": f.group_id, "label": f.label,
             "description": f.description, "page": f.page, "bbox": f.bbox, "required": f.required,
             "candidate_id": f.candidate_id, "placement": f.placement, "confidence": f.confidence,
             "reason": f.reason, "source": f.source, "value": f.value}
@@ -105,6 +106,7 @@ def _detail(db: Session, env: Envelope) -> dict:
         "signers": [_signer_json(s) for s in _signers(db, env.id)],
         "fields": [_field_json(f) for f in _fields(db, env.id)],
         "rejected": env.rejected,
+        "ai_draft": d.get("ai_draft"),  # null for envelopes uploaded before reset existed
         "missing_fields": d.get("missing_fields", []),
         "warnings": d.get("warnings", []),
         "ai": {"ok": d.get("meta", {}).get("error") is None, **{k: d.get("meta", {}).get(k)
@@ -127,15 +129,18 @@ def _store_proposal(db: Session, env: Envelope, ex, proposal: dict) -> None:
                      "bbox": cands[r["candidate_id"]].bbox, "reason": r["reason"],
                      "label": cands[r["candidate_id"]].left_label or cands[r["candidate_id"]].above_label or ""}
                     for r in proposal["rejected_candidates"] if r["candidate_id"] in cands]
-    for s in proposal["signers"]:
-        db.add(Signer(envelope_id=env.id, key=s["id"], party_id=s["party_id"], label=s["label"],
+    signers = [Signer(envelope_id=env.id, key=s["id"], party_id=s["party_id"], label=s["label"],
                       role=roles.get(s["party_id"], ""), order=s["order"], required=s["required"],
-                      confidence=s["confidence"], reason=s["reason"]))
-    for f in proposal["fields"]:
-        db.add(FieldRow(envelope_id=env.id, key=f["id"], signer_key=f["signer_id"], filled_by=f["filled_by"],
-                        type=f["type"], label=f["label"], description=f["description"], page=f["page"],
-                        bbox=f["bbox"], required=f["required"], candidate_id=f["candidate_id"],
-                        placement=f["placement"], confidence=f["confidence"], reason=f["reason"]))
+                      confidence=s["confidence"], reason=s["reason"]) for s in proposal["signers"]]
+    fields = [FieldRow(envelope_id=env.id, key=f["id"], signer_key=f["signer_id"], filled_by=f["filled_by"],
+                       type=f["type"], group_id=f.get("group_id"), label=f["label"], description=f["description"],
+                       page=f["page"], bbox=f["bbox"], required=f["required"], candidate_id=f["candidate_id"],
+                       placement=f["placement"], confidence=f["confidence"], reason=f["reason"])
+              for f in proposal["fields"]]
+    db.add_all([*signers, *fields])
+    # The AI's untouched draft, for "Reset to AI suggestions" (same shape as the detail's signers/fields/rejected).
+    env.document["ai_draft"] = {"signers": [_signer_json(s) for s in signers],
+                                "fields": [_field_json(f) for f in fields], "rejected": env.rejected}
 
 
 # ---------- envelopes ----------
@@ -235,6 +240,7 @@ class FieldIn(BaseModel):
     signer_id: str | None = None
     filled_by: str = "signer"
     type: str
+    group_id: str | None = None
     label: str = ""
     description: str = ""
     page: int
@@ -274,6 +280,8 @@ def save_draft(envelope_id: int, body: DraftIn, user: User = Depends(current_use
     for f in body.fields:
         if f.type not in FIELD_TYPES:
             raise HTTPException(400, f"Unknown field type '{f.type}'")
+        if (f.type == "radio") != bool(f.group_id):
+            raise HTTPException(400, f"Field {f.id}: radio options need a group (and only radio options have one)")
         if f.filled_by not in ("signer", "sender"):
             raise HTTPException(400, f"Field {f.id}: filled_by must be 'signer' or 'sender'")
         if f.signer_id is not None and f.signer_id not in signer_keys:
@@ -290,7 +298,8 @@ def save_draft(envelope_id: int, body: DraftIn, user: User = Depends(current_use
                       reason=s.reason, source=s.source))
     for f in body.fields:
         db.add(FieldRow(envelope_id=env.id, key=f.id, signer_key=f.signer_id if f.filled_by == "signer" else None,
-                        filled_by=f.filled_by, type=f.type, label=f.label, description=f.description, page=f.page,
+                        filled_by=f.filled_by, type=f.type, group_id=f.group_id, label=f.label,
+                        description=f.description, page=f.page,
                         bbox=f.bbox, required=f.required, candidate_id=f.candidate_id, placement=f.placement,
                         confidence=f.confidence, reason=f.reason, source=f.source,
                         value=f.value if f.filled_by == "sender" else None))
@@ -315,10 +324,20 @@ def send_problems(signers: list[Signer], fields: list[FieldRow]) -> list[str]:
     unassigned = [f for f in fields if f.filled_by == "signer" and f.signer_key not in keys]
     if unassigned:
         problems.append(f"{len(unassigned)} field(s) have no signer")
-    empty_sender = [f for f in fields if f.filled_by == "sender" and f.required and not (f.value or "").strip()]
-    if empty_sender:
-        problems.append(f"{len(empty_sender)} field(s) you fill before sending are empty")
+    radio_groups = _radio_groups(fields)
+    mixed = [g for g in radio_groups.values() if len({(f.filled_by, f.signer_key) for f in g}) > 1]
+    if mixed:
+        problems.append(f"{len(mixed)} choice(s) have options given to different people")
+    # "You" fields (filled_by sender) aren't checked here: the sender fills them on the document right after Send.
     return problems
+
+
+def _radio_groups(fields: list[FieldRow]) -> dict[str, list[FieldRow]]:
+    groups: dict[str, list[FieldRow]] = {}
+    for f in fields:
+        if f.type == "radio" and f.group_id:
+            groups.setdefault(f.group_id, []).append(f)
+    return groups
 
 
 def _notify_next(db: Session, env: Envelope, signers: list[Signer], sender_email: str) -> None:
@@ -331,9 +350,39 @@ def _notify_next(db: Session, env: Envelope, signers: list[Signer], sender_email
         if s.order == group and s.status == "pending":
             s.status = "notified"
             db.add(s)
+            if s.is_self:
+                notify(db, env, s.email, "your_turn", f"Fill in your part: {env.filename}",
+                       f"Fill in your part of \"{env.filename}\". The others are notified when you finish.",
+                       link=f"/sign/{s.token}")
+                continue
             notify(db, env, s.email, "your_turn", f"Please sign: {env.filename}",
                    f"{sender_email} sent you \"{env.filename}\" to sign as {s.label}. Open the link to review and sign.",
                    link=f"/sign/{s.token}")
+
+
+def _assign_sender_fields(db: Session, env: Envelope, user: User, signers: list[Signer], fields: list[FieldRow]) -> None:
+    """The sender fills their fields ("You") on the document right after Send, before anyone else is notified.
+
+    Their fields go to the sender's signer row (the "This is me" signer, or a new "You (sender)" row when the
+    sender isn't signing), and that row goes first in the signing order, so the others see the filled-in values."""
+    mine = [f for f in fields if f.filled_by == "sender"]
+    if not mine:
+        return
+    me = next((s for s in signers if s.is_self), None)
+    if me is None:
+        keys = {s.key for s in signers}
+        key = next(k for k in ("you", *(f"you{i}" for i in range(2, 99))) if k not in keys)
+        me = Signer(envelope_id=env.id, key=key, label="You (sender)", role="Sender", name=user.email,
+                    email=user.email, is_self=True, reason="You fill these before the others are notified",
+                    source="user")
+        db.add(me)
+        signers.append(me)
+    others = [s.order for s in signers if s is not me]
+    me.order = min(others) - 1 if others else 1
+    db.add(me)
+    for f in mine:
+        f.signer_key = me.key
+        db.add(f)
 
 
 @app.post("/api/envelopes/{envelope_id}/send")
@@ -345,14 +394,19 @@ def send_envelope(envelope_id: int, user: User = Depends(current_user), db: Sess
     problems = send_problems(signers, fields)
     if problems:
         raise HTTPException(400, {"message": "Not ready to send", "problems": problems})
+    _assign_sender_fields(db, env, user, signers, fields)
     for s in signers:
         s.token = secrets.token_urlsafe(24)
         s.status = "pending"
         db.add(s)
     env.status, env.sent_at = "sent", now()
     db.add(env)
+    others = [s for s in signers if not s.is_self]
+    me = next((s for s in signers if s.is_self), None)
+    me_first = me is not None and others and me.order < min(o.order for o in others)
     notify(db, env, user.email, "sent", f"Sent: {env.filename}",
-           f"You sent \"{env.filename}\" to " + ", ".join(f"{s.name} <{s.email}>" for s in signers) + ".",
+           f"You sent \"{env.filename}\" to " + (", ".join(f"{s.name} <{s.email}>" for s in others) or "yourself") + "."
+           + (" They're notified once you've filled in your part." if me_first else ""),
            link=f"/envelopes/{env.id}")
     _notify_next(db, env, signers, user.email)
     db.commit()
@@ -407,15 +461,18 @@ def signing_view(token: str, db: Session = Depends(get_session)):
         "envelope": {"filename": env.filename, "doc_type": env.document.get("doc_type"), "status": env.status,
                      "sender_email": owner.email if owner else None},
         "signer": {"id": s.key, "label": s.label, "name": s.name, "email": s.email, "status": s.status,
+                   "is_self": s.is_self, "envelope_id": env.id if s.is_self else None,
                    "signed_at": _iso(s.signed_at)},
         "can_sign": s.status == "notified",
         "waiting_for_others": s.status == "pending",
+        # The sender goes first when they have fields to fill: the others are notified once they finish.
+        "others_wait_for_me": any(o.order > s.order and o.status == "pending" for o in _signers(db, env.id)),
         "pages": _pages(env, f"/api/sign/{token}"),
         "fields": [_field_json(f) | {"value": f.value} for f in fields if f.signer_key == s.key],
         "others": [{"page": f.page, "bbox": f.bbox, "type": f.type} for f in fields
                    if f.signer_key != s.key and f.filled_by == "signer"],
         "prefilled": [{"page": f.page, "bbox": f.bbox, "type": f.type, "value": f.value} for f in fields
-                      if f.filled_by == "sender" and f.value],
+                      if f.filled_by == "sender" and f.value and f.value != "false"],
         "final_pdf_url": f"/api/sign/{token}/final.pdf" if env.final_pdf_path else None,
     }
 
@@ -446,12 +503,18 @@ def submit_signature(token: str, body: SignIn, db: Session = Depends(get_session
         v = (body.values.get(f.key) or "").strip()
         if f.type in ("signature", "initials") and v and not v.startswith("data:image/png;base64,"):
             raise HTTPException(400, f"{f.label or f.type}: signature must be a PNG image")
-        if f.type == "checkbox":
+        if f.type in ("checkbox", "radio"):
             v = "true" if v == "true" else "false"
-        if f.required and f.type != "checkbox" and not v:  # a checkbox's answer is checked or unchecked
+        if f.required and f.type not in ("checkbox", "radio") and not v:  # a checkbox's answer is checked or not
             missing.append(f.label or f.type)
         f.value = v or None
         db.add(f)
+    for g in _radio_groups(mine).values():  # a choice: at most one option, and exactly one when required
+        picked = sum(f.value == "true" for f in g)
+        if picked > 1:
+            raise HTTPException(400, f"Choose only one option for {g[0].description or g[0].label or 'a choice'}")
+        if picked == 0 and any(f.required for f in g):
+            missing.append(g[0].description or f"one of: {', '.join(f.label for f in g if f.label)}" or "a choice")
     if missing:
         raise HTTPException(400, {"message": "Some required fields are empty", "problems": missing})
     s.status, s.signed_at = "signed", now()
@@ -494,7 +557,8 @@ class AskIn(BaseModel):
 
 
 def _field_line(f: FieldRow) -> str:
-    return f"- {f.type} '{f.label or f.description or 'field'}' on page {f.page}" + ("" if f.required else " (optional)")
+    kind = f"radio option of choice {f.group_id}" if f.type == "radio" else f.type
+    return f"- {kind} '{f.label or f.description or 'field'}' on page {f.page}" + ("" if f.required else " (optional)")
 
 
 def _sender_context(db: Session, env: Envelope) -> str:
