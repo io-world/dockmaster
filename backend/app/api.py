@@ -297,16 +297,38 @@ def save_draft(envelope_id: int, body: DraftIn, user: User = Depends(current_use
                       is_self=s.is_self, order=s.order, required=s.required, confidence=s.confidence,
                       reason=s.reason, source=s.source))
     for f in body.fields:
-        db.add(FieldRow(envelope_id=env.id, key=f.id, signer_key=f.signer_id if f.filled_by == "signer" else None,
+        db.add(FieldRow(envelope_id=env.id, key=f.id, signer_key=f.signer_id,
                         filled_by=f.filled_by, type=f.type, group_id=f.group_id, label=f.label,
                         description=f.description, page=f.page,
                         bbox=f.bbox, required=f.required, candidate_id=f.candidate_id, placement=f.placement,
                         confidence=f.confidence, reason=f.reason, source=f.source,
-                        value=f.value if f.filled_by == "sender" else None))
+                        value=_prefill(f.type, f.value)))
     env.rejected = [r.model_dump() for r in body.rejected]
     db.add(env)
     db.commit()
     return _detail(db, env)
+
+
+def _prefill(ftype: str, value: str | None) -> str | None:
+    """A value the sender pre-fills for a participant (locked for them when they sign). Never a signature."""
+    v = (value or "").strip()
+    if ftype in ("signature", "initials") or not v:
+        return None
+    if ftype in ("checkbox", "radio"):
+        return "true" if v == "true" else None
+    return v
+
+
+def _shown(f: FieldRow) -> bool:
+    return bool(f.value) and f.value != "false" and f.type not in ("signature", "initials")
+
+
+def _locked(f: FieldRow, fields: list[FieldRow]) -> bool:
+    """Pre-filled by the sender before sending: shown to the signer, not editable. A radio choice is locked when
+    any of its options was pre-selected."""
+    if f.type == "radio" and f.group_id:
+        return any(o.value == "true" for o in fields if o.type == "radio" and o.group_id == f.group_id)
+    return bool(f.value) and f.type not in ("signature", "initials")
 
 
 def send_problems(signers: list[Signer], fields: list[FieldRow]) -> list[str]:
@@ -321,14 +343,13 @@ def send_problems(signers: list[Signer], fields: list[FieldRow]) -> list[str]:
         if not s.email or not EMAIL_RE.match(s.email):
             problems.append(f"{who}: enter a valid email")
     keys = {s.key for s in signers}
-    unassigned = [f for f in fields if f.filled_by == "signer" and f.signer_key not in keys]
+    unassigned = [f for f in fields if f.signer_key not in keys]  # every field belongs to a signer
     if unassigned:
         problems.append(f"{len(unassigned)} field(s) have no signer")
     radio_groups = _radio_groups(fields)
     mixed = [g for g in radio_groups.values() if len({(f.filled_by, f.signer_key) for f in g}) > 1]
     if mixed:
         problems.append(f"{len(mixed)} choice(s) have options given to different people")
-    # "You" fields (filled_by sender) aren't checked here: the sender fills them on the document right after Send.
     return problems
 
 
@@ -350,39 +371,9 @@ def _notify_next(db: Session, env: Envelope, signers: list[Signer], sender_email
         if s.order == group and s.status == "pending":
             s.status = "notified"
             db.add(s)
-            if s.is_self:
-                notify(db, env, s.email, "your_turn", f"Fill in your part: {env.filename}",
-                       f"Fill in your part of \"{env.filename}\". The others are notified when you finish.",
-                       link=f"/sign/{s.token}")
-                continue
             notify(db, env, s.email, "your_turn", f"Please sign: {env.filename}",
                    f"{sender_email} sent you \"{env.filename}\" to sign as {s.label}. Open the link to review and sign.",
                    link=f"/sign/{s.token}")
-
-
-def _assign_sender_fields(db: Session, env: Envelope, user: User, signers: list[Signer], fields: list[FieldRow]) -> None:
-    """The sender fills their fields ("You") on the document right after Send, before anyone else is notified.
-
-    Their fields go to the sender's signer row (the "This is me" signer, or a new "You (sender)" row when the
-    sender isn't signing), and that row goes first in the signing order, so the others see the filled-in values."""
-    mine = [f for f in fields if f.filled_by == "sender"]
-    if not mine:
-        return
-    me = next((s for s in signers if s.is_self), None)
-    if me is None:
-        keys = {s.key for s in signers}
-        key = next(k for k in ("you", *(f"you{i}" for i in range(2, 99))) if k not in keys)
-        me = Signer(envelope_id=env.id, key=key, label="You (sender)", role="Sender", name=user.email,
-                    email=user.email, is_self=True, reason="You fill these before the others are notified",
-                    source="user")
-        db.add(me)
-        signers.append(me)
-    others = [s.order for s in signers if s is not me]
-    me.order = min(others) - 1 if others else 1
-    db.add(me)
-    for f in mine:
-        f.signer_key = me.key
-        db.add(f)
 
 
 @app.post("/api/envelopes/{envelope_id}/send")
@@ -394,7 +385,6 @@ def send_envelope(envelope_id: int, user: User = Depends(current_user), db: Sess
     problems = send_problems(signers, fields)
     if problems:
         raise HTTPException(400, {"message": "Not ready to send", "problems": problems})
-    _assign_sender_fields(db, env, user, signers, fields)
     for s in signers:
         s.token = secrets.token_urlsafe(24)
         s.status = "pending"
@@ -402,11 +392,8 @@ def send_envelope(envelope_id: int, user: User = Depends(current_user), db: Sess
     env.status, env.sent_at = "sent", now()
     db.add(env)
     others = [s for s in signers if not s.is_self]
-    me = next((s for s in signers if s.is_self), None)
-    me_first = me is not None and others and me.order < min(o.order for o in others)
     notify(db, env, user.email, "sent", f"Sent: {env.filename}",
-           f"You sent \"{env.filename}\" to " + (", ".join(f"{s.name} <{s.email}>" for s in others) or "yourself") + "."
-           + (" They're notified once you've filled in your part." if me_first else ""),
+           f"You sent \"{env.filename}\" to " + (", ".join(f"{s.name} <{s.email}>" for s in others) or "yourself") + ".",
            link=f"/envelopes/{env.id}")
     _notify_next(db, env, signers, user.email)
     db.commit()
@@ -468,11 +455,13 @@ def signing_view(token: str, db: Session = Depends(get_session)):
         # The sender goes first when they have fields to fill: the others are notified once they finish.
         "others_wait_for_me": any(o.order > s.order and o.status == "pending" for o in _signers(db, env.id)),
         "pages": _pages(env, f"/api/sign/{token}"),
-        "fields": [_field_json(f) | {"value": f.value} for f in fields if f.signer_key == s.key],
+        "fields": [_field_json(f) | {"locked": s.status != "signed" and _locked(f, fields)}
+                   for f in fields if f.signer_key == s.key],
+        # Other people's fields: values already there (pre-filled, or entered by earlier signers) are shown.
         "others": [{"page": f.page, "bbox": f.bbox, "type": f.type} for f in fields
-                   if f.signer_key != s.key and f.filled_by == "signer"],
+                   if f.signer_key != s.key and not _shown(f)],
         "prefilled": [{"page": f.page, "bbox": f.bbox, "type": f.type, "value": f.value} for f in fields
-                      if f.filled_by == "sender" and f.value and f.value != "false"],
+                      if f.signer_key != s.key and _shown(f)],
         "final_pdf_url": f"/api/sign/{token}/final.pdf" if env.final_pdf_path else None,
     }
 
@@ -497,9 +486,13 @@ def submit_signature(token: str, body: SignIn, db: Session = Depends(get_session
         raise HTTPException(409, "You have already signed this document")
     if s.status != "notified":
         raise HTTPException(409, "It isn't your turn to sign yet")
-    mine = [f for f in _fields(db, env.id) if f.signer_key == s.key]
+    all_fields = _fields(db, env.id)
+    mine = [f for f in all_fields if f.signer_key == s.key]
+    locked = {f.key for f in mine if _locked(f, all_fields)}  # pre-filled by the sender: kept as they are
     missing = []
     for f in mine:
+        if f.key in locked:
+            continue
         v = (body.values.get(f.key) or "").strip()
         if f.type in ("signature", "initials") and v and not v.startswith("data:image/png;base64,"):
             raise HTTPException(400, f"{f.label or f.type}: signature must be a PNG image")

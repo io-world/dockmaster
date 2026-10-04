@@ -141,7 +141,7 @@ export default function SignPage({ token }: { token: string }) {
     return (
       <Shell>
         <div className="space-y-3 rounded border bg-white p-6" data-testid="signed-confirmation">
-          <h1 className="text-lg font-semibold">✓ You've {view.signer.is_self ? "completed your part of" : "signed"} {view.envelope.filename}</h1>
+          <h1 className="text-lg font-semibold">✓ You've signed {view.envelope.filename}</h1>
           {view.signer.is_self && view.signer.envelope_id ? (
             <>
               <p className="text-gray-700">
@@ -208,6 +208,20 @@ export default function SignPage({ token }: { token: string }) {
     const ring = active === f.id ? "ring-2 ring-blue-400" : "";
     const border = filled ? "border-green-600 bg-green-50/40" : f.required ? "border-amber-500 bg-amber-50/70" : "border-blue-400 bg-blue-50/50";
     const fontSize = Math.max(8, Math.min(r.height * 0.7, 14));
+    if (f.locked)
+      // Pre-filled by the sender: shown as it will be stamped, not editable.
+      return (
+        <div
+          key={b.id}
+          data-box-id={f.id}
+          data-locked="true"
+          title="Filled in by the sender"
+          className={`absolute flex overflow-hidden whitespace-nowrap border border-dashed border-gray-400 bg-gray-100/60 px-0.5 text-[#0b2a6f] ${f.type === "radio" ? "items-center justify-center rounded-full" : f.type === "checkbox" ? "items-center justify-center" : "items-start rounded-sm"}`}
+          style={{ ...pos, fontSize }}
+        >
+          {f.type === "radio" ? v === "true" && <span className="h-[60%] w-[60%] rounded-full bg-[#00008c]" /> : f.type === "checkbox" ? (v === "true" ? "X" : "") : v}
+        </div>
+      );
     return (
       <div key={b.id} data-box-id={f.id} className={`absolute ${f.type === "radio" ? "rounded-full" : "rounded-sm"} border-2 ${border} ${ring}`} style={pos} onClick={() => setActive(f.id)}>
         {(f.type === "signature" || f.type === "initials") &&
@@ -287,7 +301,8 @@ export default function SignPage({ token }: { token: string }) {
             {view.signer.is_self ? (
               <>
                 <div className="truncate">
-                  Your part of <span className="font-medium">{view.envelope.filename}</span>
+                  Sign <span className="font-medium">{view.envelope.filename}</span>
+                  {view.signer.name ? ` as ${view.signer.name}` : ""}
                 </div>
                 <div className="text-gray-600">
                   Fill in the highlighted fields, then click Finish.{view.others_wait_for_me && " The others are notified after that."}

@@ -6,8 +6,17 @@ import { ConfirmDialog, ErrorBox, Spinner } from "../components/ui";
 import DocChat from "../components/DocChat";
 import Board from "../review/Board";
 import { checklist, type Checklist } from "../review/checklist";
-import { addField, DEFAULT_SIZE, moveFieldBox, newFieldId, newGroupId, resetToAi, SENDER_TARGET, type DraftUpdate } from "../review/draft";
+import { addField, DEFAULT_SIZE, moveFieldBox, newFieldId, newGroupId, resetToAi, type DraftUpdate } from "../review/draft";
 import { boxTag, FIELD_TYPES, fieldColor, groupName, needsReview, radioGroup, TYPE_LABEL } from "../review/model";
+
+/** Pre-filled values are drawn on the page the way they will be stamped. */
+function previewContent(f: Field): PreviewBox["content"] {
+  const v = (f.value ?? "").trim();
+  if (!v || v === "false" || f.type === "signature" || f.type === "initials") return undefined;
+  if (f.type === "checkbox") return { kind: "check", value: v };
+  if (f.type === "radio") return { kind: "radio", value: v };
+  return { kind: "text", value: v };
+}
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
@@ -67,7 +76,7 @@ function AddFieldPopover({
   onCancel: () => void;
 }) {
   const [type, setType] = useState<FieldType>("signature");
-  const [target, setTarget] = useState(signers[0]?.id ?? SENDER_TARGET);
+  const [target, setTarget] = useState(signers[0]?.id ?? "");
   const [group, setGroup] = useState<string>(""); // "" = a new choice
   // Radio: join an existing choice on this page (it keeps that choice's owner) or start a new one.
   const choices = useMemo(() => {
@@ -105,14 +114,14 @@ function AddFieldPopover({
         </label>
       )}
       <label className={`block ${joining ? "hidden" : ""}`}>
-        Who fills it
+        Who it belongs to
         <select value={target} onChange={(e) => setTarget(e.target.value)} className="mt-0.5 w-full rounded border px-1 py-1">
+          <option value="">Decide later (Needs review)</option>
           {signers.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name || s.label}
             </option>
           ))}
-          <option value={SENDER_TARGET}>Me (I fill it after Send)</option>
         </select>
       </label>
       <div className="flex justify-end gap-2">
@@ -182,8 +191,8 @@ export default function ReviewPage({ id }: { id: number }) {
     apply(
       addField({
         id,
-        signer_id: owner ? owner.signer_id : target === SENDER_TARGET ? null : target,
-        filled_by: owner ? owner.filled_by : target === SENDER_TARGET ? "sender" : "signer",
+        signer_id: owner ? owner.signer_id : target || null,
+        filled_by: "signer",
         type,
         group_id: groupId,
         label: "",
@@ -332,6 +341,7 @@ export default function ReviewPage({ id }: { id: number }) {
       label: boxTag(draft.signers, f),
       title: `${f.label || TYPE_LABEL[f.type]}${f.reason ? `: ${f.reason}` : ""}`,
       pulse: f.id === pulseId,
+      content: previewContent(f),
     }));
   }, [draft, pulseId]);
 

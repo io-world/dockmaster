@@ -34,18 +34,23 @@ export const setRadioGroup = (id: string, groupId: string): DraftUpdate => (d) =
   })(d);
 };
 
-export const SENDER_TARGET = "__sender";
+/** "Looks right": the sender confirms the field, optionally choosing which signer it belongs to. */
+export const acceptField = (id: string, signerId?: string | null): DraftUpdate =>
+  editGroup(id, signerId ? { filled_by: "signer", signer_id: signerId } : {});
 
-/** "Looks right": the sender confirms the field, optionally choosing who fills it (a signer id or SENDER_TARGET). */
-export const acceptField = (id: string, target?: string | null): DraftUpdate =>
-  editGroup(
-    id,
-    target === undefined || target === null
-      ? {}
-      : target === SENDER_TARGET
-        ? { filled_by: "sender", signer_id: null }
-        : { filled_by: "signer", signer_id: target },
-  );
+/** Pre-fill a value for the field's signer (locked for them when they sign). Not a review decision, so the field's
+ * source is left alone. Empty clears it. */
+export const setFieldValue = (id: string, value: string): DraftUpdate => (d) => ({
+  ...d,
+  fields: d.fields.map((f) => (f.id === id ? { ...f, value: value || null } : f)),
+});
+
+/** Pre-select one option of a radio choice for its signer, or clear the choice when it's already selected. */
+export const setRadioChoice = (id: string): DraftUpdate => (d) => {
+  const ids = groupIds(d, id);
+  const on = d.fields.find((f) => f.id === id)?.value !== "true";
+  return { ...d, fields: d.fields.map((f) => (ids.has(f.id) ? { ...f, value: on && f.id === id ? "true" : null } : f)) };
+};
 
 export const setFieldType = (id: string, type: FieldType): DraftUpdate => (d) => {
   const f = d.fields.find((x) => x.id === id);
@@ -111,8 +116,8 @@ export const byPosition = <T extends { page: number; bbox: number[] }>(a: T, b: 
 
 // ---------- step 4: drag and drop, box edits, new fields ----------
 
-/** Where a card was dropped: Needs review, You fill, a signer column, or Not a field. */
-export type DropTarget = { kind: "review" } | { kind: "sender" } | { kind: "signer"; signerId: string } | { kind: "rejected" };
+/** Where a card was dropped: Needs review, a signer's section, or Not a field. */
+export type DropTarget = { kind: "review" } | { kind: "signer"; signerId: string } | { kind: "rejected" };
 
 export const rejectedKey = (r: Rejected) => `${r.candidate_id}@${r.page}`;
 
@@ -122,7 +127,6 @@ export const newFieldId = () => `u${Date.now().toString(36)}${(seq++).toString(3
 /** Drop a field card on a column. */
 export const moveFieldTo = (id: string, t: DropTarget): DraftUpdate => {
   if (t.kind === "rejected") return removeField(id);
-  if (t.kind === "sender") return editGroup(id, { filled_by: "sender", signer_id: null });
   if (t.kind === "review") return editGroup(id, { filled_by: "signer", signer_id: null });
   return editGroup(id, { filled_by: "signer", signer_id: t.signerId });
 };
@@ -143,7 +147,7 @@ export const restoreRejected = (key: string, t: DropTarget): DraftUpdate => (d) 
   const field: Field = {
     id: newFieldId(),
     signer_id: t.kind === "signer" ? t.signerId : null,
-    filled_by: t.kind === "sender" ? "sender" : "signer",
+    filled_by: "signer",
     type: guessType(r.label),
     label: r.label,
     description: "",
@@ -182,7 +186,7 @@ export const addField = (field: Field): DraftUpdate => (d) => ({ ...d, fields: [
 
 /** "Reset to AI suggestions": fields and "Not a field" go back to the AI's proposal (who fills what, types, boxes;
  * removed fields return, added ones go). Signers go back to the AI's list but keep the name, email and "this is me"
- * the sender typed, and "You fill" values are kept for fields that are still "You fill". */
+ * the sender typed, and pre-filled values are kept. */
 export const resetToAi = (ai: Draft): DraftUpdate => (d) => {
   const signers = new Map(d.signers.map((s) => [s.id, s]));
   const values = new Map(d.fields.map((f) => [f.id, f.value]));
@@ -191,7 +195,7 @@ export const resetToAi = (ai: Draft): DraftUpdate => (d) => {
       const cur = signers.get(s.id);
       return cur ? { ...s, name: cur.name, email: cur.email, is_self: cur.is_self } : s;
     }),
-    fields: ai.fields.map((f) => (f.filled_by === "sender" ? { ...f, value: values.get(f.id) ?? f.value } : f)),
+    fields: ai.fields.map((f) => ({ ...f, value: values.get(f.id) ?? f.value })),
     rejected: ai.rejected,
   };
 };

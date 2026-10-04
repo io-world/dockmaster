@@ -31,13 +31,16 @@ The dev server also listens on your network, so you can test on a phone at `http
   - the parties, and one signer per signature block (optional signers such as "Guarantor (if applicable)" are marked);
   - every field's type (signature / initials / date / text / checkbox / radio) and owner, with radio options grouped into
     choices ("pick one");
-  - fields the **sender** fills (rent, party names in the preamble), shown under **You**;
+  - every field belongs to a participant; blanks about the agreement itself (party names, dates, amounts) go to
+    Needs review when the owner is unclear;
   - blanks that are **not** fields (table borders, underlined headings), each with a reason;
   - fields it expected but couldn't find.
 - **Review screen:**
-  - collapsible sections for **Needs review** (low confidence, guessed position, or no signer), **You** (merged into your own signer section when you tick "This is me"), one per signer, and **Not a field**;
+  - collapsible sections for **Needs review** (low confidence, guessed position, or no signer), one per signer, and **Not a field**;
   - a sticky drop bar: drag a card onto a destination chip (or use "Move to…"), and move or resize boxes on the page;
   - add fields, add or remove signers;
+  - optionally **pre-fill** any non-signature field for any participant (shown on the page as you type); it's locked
+    for them, and whatever you leave blank they fill in;
   - **Reset to AI suggestions** undoes your field and assignment changes (keeps signer names and emails);
   - clicking a card finds its box, and clicking a box finds its card;
   - autosave;
@@ -46,8 +49,7 @@ The dev server also listens on your network, so you can test on a phone at `http
   - no account needed;
   - only your own fields are active, with "Next field";
   - type your name straight into the signature box (shown in a script font), or draw it;
-  - the sender fills their part (preamble blanks, their own signature) on the document right after Send, and the
-    others are notified only when they finish;
+  - pre-filled fields are shown locked; the signer completes only the blank ones;
   - dates are prefilled;
   - radio choices allow exactly one option, and Finish waits until each required choice is answered.
 - **Ask about the document:** the sender (in Review) and each signer (on their signing page) can ask questions. Answers come only from the document, with clickable page references. They aren't legal advice, and the conversation isn't stored.

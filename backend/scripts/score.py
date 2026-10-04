@@ -106,7 +106,9 @@ def score_doc(truth: dict, proposal: dict, extraction: dict) -> dict:
         if not ok_type:
             errors.append(f"TYPE     {where}: got {f['type']}, expected {lab['type']}")
         ok_owner = True
-        if not lab.get("owner_any"):
+        # Labels marked "sender" are blanks the sender usually pre-fills. Since 2026-10-04 every field belongs to a
+        # signer and the sender may pre-fill any of them, so any owner is acceptable there (detection + type only).
+        if not lab.get("owner_any") and lab["filled_by"] != "sender":
             owner_scored += 1
             if lab["filled_by"] == "sender":
                 ok_owner = f["filled_by"] == "sender"

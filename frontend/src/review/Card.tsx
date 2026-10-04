@@ -1,5 +1,5 @@
 import type { Field, FieldType, Rejected, Signer } from "../api";
-import { SENDER_TARGET, type DropTarget } from "./draft";
+import type { DropTarget } from "./draft";
 import { confidenceWord, FIELD_TYPES, TYPE_ICON, TYPE_LABEL } from "./model";
 
 /** For a radio option: its place in its choice, and the choices it could move to. */
@@ -54,6 +54,8 @@ export function FieldCard({
   destinations,
   onMove,
   radio,
+  onValue,
+  signerName,
 }: {
   field: Field;
   signers: Signer[];
@@ -66,9 +68,11 @@ export function FieldCard({
   destinations: Destination[];
   onMove: (t: DropTarget) => void;
   radio?: RadioInfo;
+  onValue?: (v: string) => void; // optional pre-fill (locked for the signer); none for signatures
+  signerName?: string;
 }) {
   const conf = confidenceWord(field.confidence);
-  const needsSigner = field.filled_by === "signer" && !field.signer_id;
+  const needsSigner = field.filled_by !== "signer" || !field.signer_id;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
@@ -127,6 +131,37 @@ export function FieldCard({
         </div>
       )}
 
+      {onValue && (
+        <div className="mt-2 text-xs" onClick={stop} onPointerDown={stop}>
+          {field.type === "radio" ? (
+            <button
+              data-testid="prefill-radio"
+              onClick={() => onValue("true")}
+              className={`w-full rounded border px-2 py-1 text-left ${field.value === "true" ? "border-blue-500 bg-blue-50 font-medium" : "text-gray-600"}`}
+            >
+              {field.value === "true" ? "◉ Pre-selected (click to clear)" : "○ Pre-select this option (optional)"}
+            </button>
+          ) : field.type === "checkbox" ? (
+            <label className="flex items-center gap-1.5 text-gray-700">
+              <input data-testid="prefill-check" type="checkbox" checked={field.value === "true"} onChange={(e) => onValue(e.target.checked ? "true" : "")} />
+              Pre-tick it (optional)
+            </label>
+          ) : (
+            <input
+              data-testid="prefill"
+              onFocus={onSelect} // show the box on the page while typing
+              value={field.value ?? ""}
+              onChange={(e) => onValue(e.target.value)}
+              placeholder={`Pre-fill (optional)${field.type === "date" ? ", e.g. 2026-10-05" : ""}`}
+              className="w-full rounded border px-2 py-1 text-sm"
+            />
+          )}
+          {field.value && (
+            <div className="mt-0.5 text-gray-500">🔒 Locked for {signerName || "the signer"} when they sign.</div>
+          )}
+        </div>
+      )}
+
       <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={stop} onPointerDown={stop}>
         {inNeedsReview &&
           (needsSigner ? (
@@ -136,14 +171,13 @@ export function FieldCard({
               onChange={(e) => e.target.value && onAccept(e.target.value)}
             >
               <option value="" disabled>
-                Looks right: who fills it?
+                Who does this belong to?
               </option>
               {signers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name || s.label}
                 </option>
               ))}
-              <option value={SENDER_TARGET}>Me (I fill it after Send)</option>
             </select>
           ) : (
             <button className="rounded bg-green-600 px-2 py-0.5 text-xs text-white hover:bg-green-700" onClick={() => onAccept()}>

@@ -23,7 +23,7 @@ export function checklist(d: Draft): Checklist {
 
   items.push({ ok: d.signers.length > 0, text: "At least one signer", level: "block" });
 
-  const unassigned = d.fields.filter((f) => f.filled_by === "signer" && !(f.signer_id && keys.has(f.signer_id)));
+  const unassigned = d.fields.filter((f) => f.filled_by !== "signer" || !(f.signer_id && keys.has(f.signer_id)));
   items.push({
     ok: unassigned.length === 0,
     text: unassigned.length ? `${unassigned.length} field(s) have no signer` : "Every field has a signer",
@@ -44,10 +44,10 @@ export function checklist(d: Draft): Checklist {
   // Radio choices: one owner per choice. ("You" fields are filled on the document after Send.)
   const groups = new Map<string, Draft["fields"]>();
   for (const f of d.fields) if (f.type === "radio" && f.group_id) groups.set(f.group_id, [...(groups.get(f.group_id) ?? []), f]);
-  const mixed = [...groups.values()].filter((g) => new Set(g.map((f) => `${f.filled_by}:${f.signer_id}`)).size > 1);
+  const mixed = [...groups.values()].filter((g) => new Set(g.map((f) => f.signer_id)).size > 1);
   if (mixed.length)
     items.push({ ok: false, text: `${mixed.length} choice(s) have options given to different people`, level: "block" });
-  const review = d.fields.filter(needsReview).filter((f) => !(f.filled_by === "signer" && !f.signer_id));
+  const review = d.fields.filter(needsReview).filter((f) => f.filled_by === "signer" && f.signer_id);
   items.push({
     ok: review.length === 0,
     text: review.length ? `${review.length} field(s) still in Needs review` : "Nothing left to review",

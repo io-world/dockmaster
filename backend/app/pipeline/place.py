@@ -58,7 +58,7 @@ def place(ex: Extraction, proposed: dict) -> dict:
         fields.append({
             "id": f"f{len(fields) + 1}",
             "signer_id": signer_map.get(f["signer_id"]) if f["signer_id"] else None,
-            "filled_by": f["filled_by"],
+            "filled_by": "signer",  # every field belongs to a signer; the sender may pre-fill any of them
             "type": f["type"],
             "group_id": group_map.setdefault(f["group"], f"g{len(group_map) + 1}") if f.get("group") else None,
             "label": f["label"],

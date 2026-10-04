@@ -63,10 +63,7 @@ class Signer(BaseModel):
 
 class FieldAssignment(BaseModel):
     candidate_id: str
-    signer_id: str | None = Field(description="Signer who fills this in; null when filled_by is 'sender'")
-    filled_by: Literal["signer", "sender"] = Field(
-        description="'sender' for blanks completed before sending (party names in the preamble, amounts, "
-                    "effective dates, addresses of the sender's side); 'signer' for what the signer provides")
+    signer_id: str | None = Field(description="The signer this field belongs to; null only when you can't tell")
     type: FieldType
     label: str = Field(description="The document's own label text, e.g. 'Print Name:'")
     description: str = Field(description="Plain-English description, e.g. 'Company signatory's printed name'")
@@ -119,10 +116,11 @@ in the document text, so trust x positions and the images over reading order.
 description must name the same signer it is assigned to.
    - type: signature for Signed/Signature/By lines; initials for Initials boxes; date for Date lines; \
 checkbox for check boxes (each can be ticked on its own); radio for options where exactly one is chosen (round markers, src=radio, and RadioButton widgets); text for everything else (names, titles, addresses, amounts).
-   - Radio: give every option of one question the same `group` (g1, g2, ...), one field per option, with the option's own text as its label (e.g. 'Monthly') and the question in its description. RadioButton widgets that share a widget name are one group. All options of a group belong to the same signer (or all to the sender). Square boxes where several answers can apply stay checkboxes. Reject round markers used as list bullets.
-   - filled_by='sender' for blanks that should be completed before the document is sent: party names in \
-the preamble, effective/start dates, rent or fee amounts, property details. filled_by='signer' for what each \
-signer provides: their signature, printed name, title, signing date, initials, their own contact details.
+   - Radio: give every option of one question the same `group` (g1, g2, ...), one field per option, with the option's own text as its label (e.g. 'Monthly') and the question in its description. RadioButton widgets that share a widget name are one group. All options of a group belong to the same signer. Square boxes where several answers can apply stay checkboxes. Reject round markers used as list bullets.
+   - Every field belongs to one signer. The sender may pre-fill any non-signature field before sending, and \
+whatever is left blank is completed by its signer. Give a blank that names or describes a party (its name in the \
+preamble, its address) to that party's signer. Give blanks about the agreement itself (effective date, amounts, \
+property details) to the signer most likely to supply them, with confidence at most 0.6 when that is unclear.
    - Reject table borders, separator rules, underlined text, and captions that sit beneath another blank \
 (e.g. a 'Signature' caption under a 'By:' line). src=label_offset candidates are guesses: accept them only \
 when the label clearly asks for a value next to it.
@@ -269,7 +267,7 @@ def _validate(ex: Extraction, cp: ClaudeProposal) -> list[str]:
         if f.signer_id is not None and f.signer_id not in signer_ids:
             warnings.append(f"The AI assigned {_describe(by_id[f.candidate_id])} to a signer that doesn't exist; it's left for you to assign")
             f.signer_id, f.confidence = None, min(f.confidence, 0.3)
-        if f.filled_by == "signer" and f.signer_id is None:
+        if f.signer_id is None:
             f.confidence = min(f.confidence, 0.3)
         seen.add(f.candidate_id)
         kept_fields.append(f)
@@ -282,7 +280,7 @@ def _validate(ex: Extraction, cp: ClaudeProposal) -> list[str]:
     for c in ex.candidates:
         if c.id not in seen:
             cp.fields.append(FieldAssignment(
-                candidate_id=c.id, signer_id=None, filled_by="signer", type="radio" if c.src == "radio" else "text",
+                candidate_id=c.id, signer_id=None, type="radio" if c.src == "radio" else "text",
                 group=f"own-{c.id}" if c.src == "radio" else None,
                 label=c.left_label or c.above_label or "", description="Unclassified blank",
                 required=False, confidence=0.0, reason="Not classified by AI"))
@@ -311,11 +309,11 @@ def _fix_radio_groups(cp: ClaudeProposal, by_id: dict[str, Candidate]) -> list[s
     for opts in groups.values():
         opts.sort(key=lambda f: (by_id[f.candidate_id].page, by_id[f.candidate_id].bbox[1], by_id[f.candidate_id].bbox[0]))
         first = opts[0]
-        if any((f.signer_id, f.filled_by) != (first.signer_id, first.filled_by) for f in opts[1:]):
+        if any(f.signer_id != first.signer_id for f in opts[1:]):
             warnings.append(f"The AI gave the options of one choice ({_describe(by_id[first.candidate_id])}) to different "
                             "people; they're all given to the first option's owner")
             for f in opts[1:]:
-                f.signer_id, f.filled_by, f.confidence = first.signer_id, first.filled_by, min(f.confidence, 0.5)
+                f.signer_id, f.confidence = first.signer_id, min(f.confidence, 0.5)
         if len(opts) == 1:
             first.confidence = min(first.confidence, 0.5)  # a one-option choice is suspicious: review it
     return warnings

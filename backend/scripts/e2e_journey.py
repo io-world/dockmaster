@@ -64,7 +64,7 @@ with sync_playwright() as p:
     for _ in range(50):
         card = pg.locator("[data-testid=col-review] [data-card-id]").first
         if not card.count(): break
-        sel = card.locator("select").filter(has_text="who fills it")
+        sel = card.locator("select").filter(has_text="belong to")
         if sel.count(): sel.select_option(index=1)
         else: card.locator("button", has_text="Looks right").click()
         pg.wait_for_timeout(50)

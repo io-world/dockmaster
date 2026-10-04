@@ -5,7 +5,7 @@ import type { Field, FieldType, Signer } from "../api";
 export const NEEDS_REVIEW_THRESHOLD = 0.7;
 
 export function needsReview(f: Field): boolean {
-  if (f.filled_by === "signer" && !f.signer_id) return true; // always: someone has to fill it
+  if (f.filled_by !== "signer" || !f.signer_id) return true; // always: every field needs its signer
   if (f.source === "user") return false; // the sender has checked or edited it
   return f.placement === "label_offset" || (f.confidence ?? 0) < NEEDS_REVIEW_THRESHOLD;
 }
@@ -24,7 +24,7 @@ export function signerColor(signers: Signer[], signerId: string | null): string 
 }
 
 export function fieldColor(f: Field, signers: Signer[]): string {
-  return f.filled_by === "sender" ? SENDER_COLOR : signerColor(signers, f.signer_id);
+  return f.filled_by === "signer" ? signerColor(signers, f.signer_id) : UNASSIGNED_COLOR;
 }
 
 export const FIELD_TYPES: FieldType[] = ["signature", "initials", "date", "text", "checkbox", "radio"];
@@ -65,7 +65,6 @@ export function groupName(options: Field[]): string {
 
 /** Short tag for a signer: name initial once a name is entered, otherwise its number (1, 2, …). */
 export function signerTag(signers: Signer[], f: Field): string {
-  if (f.filled_by === "sender") return "You";
   const i = signers.findIndex((x) => x.id === f.signer_id);
   if (i < 0) return "?";
   const name = signers[i].name?.trim();

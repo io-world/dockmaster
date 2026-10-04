@@ -25,7 +25,7 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
   Warnings banner replaced by an expandable/minimisable "AI summary" panel (summary + notes; never dismissed).
   AI notes now refer to pages/labels instead of candidate IDs.
   Ask-the-document chat for the sender (Review panel) and signers (signing page); page links; prompt-cached; history not stored.
-  Session 3 (2026-10-03): live "You fill" value preview on the page (superseded 10-04: You fields are filled after Send); "Reset to AI suggestions" (`ai_draft` snapshot);
+  Session 3 (2026-10-03): live "You fill" value preview on the page (superseded 10-04: no sender role; optional locked pre-fill per field); "Reset to AI suggestions" (`ai_draft` snapshot);
   radio buttons end to end (extract `src=radio`, AI `group`, `field.group_id` column via a tiny migration in `db.py`).
 - Step 7: full journey passes against the production Docker container (`backend/scripts/e2e_journey.py`).
 - `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
@@ -199,9 +199,8 @@ PyMuPDF is not thread-safe: never share a document across threads.
 3. In the same panel: name + email per signer, "this is me" toggle.
 4. Send — **blocked** until every field has a signer and every signer has an email.
 5. Signers open their link (**no account required**), fill only their fields, submit.
-6. Right after Send, the sender fills their part on the document ("You" fields + their own signature if "This is me");
-   their row goes first in the order, so the others are notified only when they finish. No "This is me" + You fields →
-   a "You (sender)" row is created at send.
+6. Every field belongs to a signer. In Review the sender may pre-fill any non-signature field (locked for that
+   signer); blanks are completed by the signer. If the sender is a signer ("This is me"), they sign right after Send.
 7. All signed → stamp final PDF → "completed" outbox entry to everyone → download.
 
 Outbox entries are clickable and contain the real signing link (no real email delivery).

@@ -58,6 +58,7 @@ export interface Field {
   filled_by: "signer" | "sender";
   type: FieldType;
   group_id?: string | null; // radio only: options of one choice share it; exactly one is picked
+  locked?: boolean; // signing page only: pre-filled by the sender, shown but not editable
   label: string;
   description: string;
   page: number;
