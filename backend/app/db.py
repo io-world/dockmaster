@@ -1,7 +1,7 @@
 """Database engine, data directory, and session dependency.
 
 SQLite file + uploaded/generated files live under DATA_DIR (env var; default backend/data, gitignored).
-In Docker, DATA_DIR points at the persistent volume.
+Set DATA_DIR to run a second, isolated copy (e.g. automated tests on another port).
 """
 
 import os

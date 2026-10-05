@@ -27,15 +27,15 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
   Ask-the-document chat for the sender (Review panel) and signers (signing page); page links; prompt-cached; history not stored.
   Session 3 (2026-10-03): live "You fill" value preview on the page (superseded 10-04: no sender role; optional locked pre-fill per field); "Reset to AI suggestions" (`ai_draft` snapshot);
   radio buttons end to end (extract `src=radio`, AI `group`, `field.group_id` column via a tiny migration in `db.py`).
-- Step 7: full journey passes against the production Docker container (`backend/scripts/e2e_journey.py`).
+- Step 7: full journey passes end to end (`backend/scripts/e2e_journey.py`).
 - `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
 - README.md and AI_TOOLING_NOTES.md drafted.
 - Public repo https://github.com/io-world/dockmaster: clean history (old commit purged by deleting and recreating the
   repo on 2026-10-02), all docs committed. Repo-local git author is set to the io-world noreply address.
 
 **Open items (in priority order)**
-1. **Deploy** to a host with a persistent volume (`/data`) and `ANTHROPIC_API_KEY` set. The host isn't chosen yet.
-   The image works (`docker run … --env-file .env`); it's 1.83 GB (slimming optional).
+1. **Deploy:** self-hosted on the owner's machine (port 80 → :8000), production mode (built frontend + uvicorn, no
+   `--reload`). No Docker (removed 2026-10-04).
 2. **Unseen-PDF drill:** someone else picks documents and uses the app cold. Fix what breaks.
 3. **AI_TOOLING_NOTES.md:** the user adds their own reflections (marked "To finish (owner)").
 4. **5-minute recording.** Stop adding features by Sunday 4 Oct midday.
@@ -78,7 +78,7 @@ Not scored: visual polish, tests/CI, security hardening, legal compliance, scale
 - Scans: no OCR engine. `opencv-python-headless` finds lines; Claude reads labels from page images on which every candidate is drawn as a red box + ID. PyMuPDF `get_textpage_ocr()` is used only if Tesseract happens to be installed (optional).
 - LLM: Anthropic API. Start with `claude-sonnet-5-5`; evaluate `claude-haiku-4-5-20251001` on the labeled test set for cost.
 - Frontend: React + Vite + TypeScript + Tailwind (decided and built). `@dnd-kit/core` for drag between columns, `react-rnd` for box move/resize, `signature_pad` for signatures. No router library or state library.
-- Deploy: single Docker container (multi-stage: Node builds frontend, FastAPI serves it). Host must have a persistent volume.
+- Deploy: one process. `npm run build` makes `frontend/dist`; uvicorn serves the API and those files on one URL. Data in `backend/data/`.
 
 ## Repo layout
 ```
@@ -97,7 +97,6 @@ backend/
     score.py        # compare output to labeled ground truth
   test_pdfs/        # real-world docs + *.labels.json ground truth
 frontend/
-Dockerfile
 DECISIONS.md        # every scope decision + cut, with reasoning and timestamp
 TECH_STACK.md       # libraries/services/tools used: version, purpose, GitHub repo, license
 AI_TOOLING_NOTES.md # what AI tools did, where I took over, what they got wrong
@@ -208,7 +207,7 @@ Outbox entries are clickable and contain the real signing link (no real email de
 ## Build order
 1. `extract.py` + `run_pipeline.py` on 8–10 real PDFs (mutual NDA, one-way NDA, 3-party agreement, lease, offer letter, waiver, Word-exported contract, a scanned page, a PDF with existing form fields). Eyeball the candidates.
 2. `propose.py` + `place.py`. Hand-label test PDFs, run `score.py`, record accuracy.
-3. Models + API. Deploy a hello-world container early; confirm files survive a restart.
+3. Models + API. Confirm files survive a restart.
 4. Signing flow + `stamp.py` + outbox.
 5. Frontend review and signing screens.
 6. Unseen-PDF drill: someone else picks documents and uses it cold. Fix what breaks.
@@ -220,15 +219,16 @@ Outbox entries are clickable and contain the real signing link (no real email de
 - When a scope decision is made, append it to `DECISIONS.md` (date, decision, reason).
 - When a library, service or tool is added (or a planned one starts being used), update `TECH_STACK.md` (version, purpose, where in the code, GitHub repo, license).
 - Log token usage and cost on every Claude API call.
-- Prefer simple: SQLite, sync requests, one container. Ask before adding infrastructure.
+- Prefer simple: SQLite, sync requests, one process. Ask before adding infrastructure.
 - Secrets via environment variables (`ANTHROPIC_API_KEY`, loaded from the gitignored `.env`); never commit them.
 
 ## Running
 - Frontend dev (second terminal): `cd frontend && uv run npm run dev` → http://localhost:5173 (proxies `/api` to :8000).
   Vite listens on the LAN too (`server.host: true`): open `http://<this Mac's IP>:5173` or `http://<name>.local:5173` from a phone. The backend can stay on localhost.
   First time: `cd frontend && uv run npm install`. Node lives in `.venv` (nodeenv); always run npm through `uv run`.
-- Production: `docker build -t dockmaster . && docker run -p 8000:8000 -v dockmaster_data:/data --env-file .env dockmaster`.
-- End-to-end check: `PLAYWRIGHT_BROWSERS_PATH=.venv/playwright-browsers uv run python backend/scripts/e2e_journey.py <url> <pdf> <outdir>` (fresh data volume; one AI call).
+- Production: `cd frontend && uv run npm run build && cd .. && uv run uvicorn app.api:app --app-dir backend --host 0.0.0.0 --port 8000`
+  (no `--reload`; serves the API and `frontend/dist` on :8000).
+- End-to-end check: `PLAYWRIGHT_BROWSERS_PATH=.venv/playwright-browsers uv run python backend/scripts/e2e_journey.py <url> <pdf> <outdir>` (empty data folder: set `DATA_DIR`; one AI call).
 - `uv run uvicorn app.api:app --app-dir backend --reload` — API on :8000 (data in `backend/data/`, or `DATA_DIR`).
 - `uv run python backend/scripts/run_pipeline.py <pdf> [--out DIR] [--overlay] [--no-ai]` — run pipeline, print JSON.
 - `uv run python backend/scripts/test_pdf.py <pdf-or-folder> [...] [--no-ai]` — run on any PDFs on disk; writes

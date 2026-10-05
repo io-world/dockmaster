@@ -6,12 +6,13 @@ signed, the signed PDF is ready to download.
 
 ## Run it
 
-**Production (one container, one URL):**
+**Production (one process, one URL):**
 ```bash
-docker build -t dockmaster .
-docker run -p 8000:8000 -v dockmaster_data:/data --env-file .env dockmaster   # .env holds ANTHROPIC_API_KEY
+cd frontend && uv run npm run build && cd ..                                   # builds frontend/dist
+uv run uvicorn app.api:app --app-dir backend --host 0.0.0.0 --port 8000        # .env holds ANTHROPIC_API_KEY
 ```
-Open http://localhost:8000. The SQLite database, uploads, page images and signed PDFs live on the `/data` volume.
+Open http://localhost:8000: the backend serves the API and the built frontend together. The SQLite database, uploads,
+page images and signed PDFs live in `backend/data/` (or `DATA_DIR`). After pulling new code, run both lines again.
 
 **Development (two terminals):**
 ```bash

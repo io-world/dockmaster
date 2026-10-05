@@ -16,7 +16,7 @@ Versions are the ones installed via `uv.lock` as of 2026-10-01.
 | [Pydantic](https://github.com/pydantic/pydantic) | 2.13.5 | Schema for Claude's answer (parties, signers, fields). The schema has no coordinate fields, so Claude cannot place boxes. | `propose.py` | pydantic/pydantic | MIT |
 | [python-dotenv](https://github.com/theskumar/python-dotenv) | 1.2.4 | Loading `ANTHROPIC_API_KEY` from the gitignored `.env` | `run_pipeline.py`, `api.py` | theskumar/python-dotenv | BSD-3-Clause |
 | [FastAPI](https://github.com/fastapi/fastapi) | 0.142.2 | HTTP API under `/api`; serves page images, PDFs and the built frontend | `api.py`, `auth.py` | fastapi/fastapi | MIT |
-| [Uvicorn](https://github.com/encode/uvicorn) | 0.54.0 | ASGI server that runs the FastAPI app | command line / Dockerfile | encode/uvicorn | BSD-3-Clause |
+| [Uvicorn](https://github.com/encode/uvicorn) | 0.54.0 | ASGI server that runs the FastAPI app | command line | encode/uvicorn | BSD-3-Clause |
 | [SQLModel](https://github.com/fastapi/sqlmodel) | 0.0.47 | SQLite tables: users, sessions, envelopes, signers, fields, outbox | `models.py`, `db.py` | fastapi/sqlmodel | MIT |
 | [python-multipart](https://github.com/Kludex/python-multipart) | 0.0.32 | Parsing PDF uploads (`UploadFile`) | `api.py` | Kludex/python-multipart | Apache-2.0 |
 
@@ -58,18 +58,12 @@ receives has every candidate blank drawn as a red box labelled with its ID (`pro
 | signature_pad | 5.1.4 | Drawing signatures | [szimek/signature_pad](https://github.com/szimek/signature_pad) | MIT |
 | Dancing Script (Google Fonts) | n/a | Script font for typed signatures, loaded at runtime from fonts.googleapis.com; falls back to a system cursive font if unavailable | [google/fonts](https://github.com/google/fonts) | OFL-1.1 |
 
-### Dev-only tools (not in the Docker image)
+### Dev-only tools
 
 | Tool | Version | Used for | GitHub | License |
 |---|---|---|---|---|
 | nodeenv | 1.11.0 | Installs Node.js 24 inside `.venv` | [ekalinin/nodeenv](https://github.com/ekalinin/nodeenv) | BSD-3-Clause |
 | Playwright (Python) | 1.63.0 | Driving the UI in headless Chromium for checks and screenshots | [microsoft/playwright-python](https://github.com/microsoft/playwright-python) | Apache-2.0 |
-
-### Deployment
-
-| Technology | For | GitHub |
-|---|---|---|
-| Docker | Single-container deploy (`Dockerfile`): Node build stage plus Python runtime, with `/data` volume | [docker](https://github.com/docker) |
 
 ## Licensing note
 
