@@ -1,0 +1,72 @@
+{
+  "area": "Accounts",
+  "cases": [
+    {
+      "id": "ACC-01",
+      "title": "Create an account from a private window",
+      "covers": ["R-AUTH", "R-LIVE"],
+      "priority": "high",
+      "preconditions": ["The app is running", "A private browser window is open"],
+      "steps": [
+        "Go to the app's address",
+        "Click \"Create an account\"",
+        "Type the sender's email into \"Email\"",
+        "Type the sender's password into \"Password\"",
+        "Click \"Create account\""
+      ],
+      "expected": [
+        "The Inbox opens",
+        "It says \"No envelopes yet\" and shows \"Upload new PDF\"",
+        "The sender's email is shown at the top right"
+      ]
+    },
+    {
+      "id": "ACC-02",
+      "title": "Sign out and sign back in",
+      "covers": ["R-AUTH"],
+      "priority": "high",
+      "preconditions": ["ACC-01 done"],
+      "steps": [
+        "Click \"Sign out\"",
+        "Check that the sign-in page is shown",
+        "Type the sender's email into \"Email\"",
+        "Type the sender's password into \"Password\"",
+        "Click \"Sign in\""
+      ],
+      "expected": ["The Inbox opens with the same documents as before"]
+    },
+    {
+      "id": "ACC-03",
+      "title": "Wrong password and duplicate sign-up",
+      "covers": ["R-AUTH"],
+      "priority": "medium",
+      "preconditions": ["ACC-01 done", "Signed out"],
+      "steps": [
+        "Type the sender's email into \"Email\"",
+        "Type \"wrong-password\" into \"Password\"",
+        "Click \"Sign in\"",
+        "Click \"Create an account\"",
+        "Type the sender's email into \"Email\" and any 8+ character password into \"Password\"",
+        "Click \"Create account\""
+      ],
+      "expected": [
+        "The wrong password shows a plain error and stays on the sign-in page",
+        "Signing up again with the same email shows a plain error (the account already exists)"
+      ]
+    },
+    {
+      "id": "ACC-04",
+      "title": "Short password is refused",
+      "covers": ["R-AUTH"],
+      "priority": "low",
+      "preconditions": ["Signed out"],
+      "steps": [
+        "Click \"Create an account\"",
+        "Type a new email into \"Email\"",
+        "Type \"short\" into \"Password\"",
+        "Click \"Create account\""
+      ],
+      "expected": ["A message says the password needs at least 8 characters", "No account is created"]
+    }
+  ]
+}

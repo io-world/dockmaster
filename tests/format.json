@@ -1,0 +1,28 @@
+{
+  "about": "How the test files in this folder are written. Read this first.",
+  "files": {
+    "requirements.json": "What DockMaster must do. Each requirement has an id (R-...) that test cases point to.",
+    "test-data.json": "Accounts, people and documents the test cases use. Never use real personal documents.",
+    "cases/*.json": "Test cases grouped by area, in the order a tester would naturally run them."
+  },
+  "test_case_fields": {
+    "id": "Unique id, e.g. REV-03. The prefix is the area.",
+    "title": "One line: what is being checked.",
+    "covers": "Requirement ids from requirements.json.",
+    "priority": "high = must pass before submitting; medium = should pass; low = nice to have.",
+    "preconditions": "What must already be true. Often another test case id (\"REV-01 done\").",
+    "steps": "Plain-English navigation. Words in \"quotes\" are exact on-screen labels. One action per step.",
+    "expected": "What you should see. Every item must be true for the case to pass.",
+    "notes": "Optional: why the case exists, known variation, things not to mistake for a bug."
+  },
+  "step_vocabulary": {
+    "Go to <page>": "Use the top navigation (\"Inbox\", \"Outbox\") or open the URL.",
+    "Click \"<label>\"": "A button or link with that text.",
+    "Type \"<text>\" into <field>": "A text box, named by its label or placeholder.",
+    "Choose \"<option>\" in <menu>": "A drop-down menu.",
+    "Drag <thing> onto <target>": "Mouse drag.",
+    "Open <link> in a private window": "A browser window with no cookies, as a recipient with no account would.",
+    "Check that ...": "A look-only step: nothing is clicked."
+  },
+  "how_to_record_a_run": "Copy the case ids into a list and mark each pass, fail or blocked, with a one-line note and a screenshot for every fail."
+}

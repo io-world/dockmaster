@@ -40,6 +40,8 @@ The dev server also listens on your network, so you can test on a phone at `http
   - collapsible sections for **Needs review** (low confidence, guessed position, or no signer), one per signer, and **Not a field**;
   - a sticky drop bar: drag a card onto a destination chip (or use "Move to…"), and move or resize boxes on the page;
   - add fields, add or remove signers;
+  - add radio options or checkboxes as a group: say how many, then move and resize one dashed frame and they re-space
+    evenly (a row when wide, a column when tall); name each radio choice;
   - optionally **pre-fill** any non-signature field for any participant (shown on the page as you type); it's locked
     for them, and whatever you leave blank they fill in;
   - **Reset to AI suggestions** undoes your field and assignment changes (keeps signer names and emails);
@@ -49,7 +51,8 @@ The dev server also listens on your network, so you can test on a phone at `http
 - **Signing:**
   - no account needed;
   - only your own fields are active, with "Next field";
-  - type your name straight into the signature box (shown in a script font), or draw it;
+  - click a signature or initials box: a dialog opens pre-filled with your name (or initials) in a script font; Apply
+    scales it to fit the box, or draw it instead;
   - pre-filled fields are shown locked; the signer completes only the blank ones;
   - dates are prefilled;
   - radio choices allow exactly one option, and Finish waits until each required choice is answered.
@@ -106,7 +109,7 @@ call takes 8–22 seconds. Every call's tokens and cost are logged to `backend/o
 ## Repo map
 `backend/app/pipeline/` (extract, propose, place, stamp) · `backend/app/api.py`, `auth.py`, `models.py`, `outbox.py` ·
 `backend/scripts/` (`test_pdf.py`, `run_pipeline.py`, `score.py`, `e2e_journey.py`) · `frontend/src/` (`api.ts` is the
-only module that calls the backend; all point↔pixel math is in `geometry.ts`) · [CLAUDE.md](CLAUDE.md) (spec and
+only module that calls the backend; all point↔pixel math is in `geometry.ts`) · `tests/` (testing requirements and plain-English test cases, as JSON) · [CLAUDE.md](CLAUDE.md) (spec and
 current status) · [DECISIONS.md](DECISIONS.md) · [TECH_STACK.md](TECH_STACK.md) · [AI_TOOLING_NOTES.md](AI_TOOLING_NOTES.md)
 
 ## Licensing

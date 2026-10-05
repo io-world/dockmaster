@@ -70,8 +70,18 @@ def _fields(db: Session, env_id: int) -> list[FieldRow]:
 
 
 def _pages(env: Envelope, base: str) -> list[dict]:
+    # ?v= is unique per upload: SQLite reuses the ids of deleted envelopes, and a browser must never show a
+    # deleted document's cached page for a new one.
+    v = int(env.created_at.timestamp() * 1000) if env.created_at else 0
     return [{**{k: p[k] for k in ("n", "width", "height", "rotation", "text_layer")},
-             "image_url": f"{base}/pages/{p['n']}.png"} for p in env.document.get("pages", [])]
+             "image_url": f"{base}/pages/{p['n']}.png?v={v}"} for p in env.document.get("pages", [])]
+
+
+NO_CACHE = {"Cache-Control": "no-cache"}  # always revalidate (cheap 304 via ETag); never reuse a stale file
+
+
+def _file(path, media_type: str, filename: str | None = None) -> FileResponse:
+    return FileResponse(path, media_type=media_type, filename=filename, headers=NO_CACHE)
 
 
 def _signer_json(s: Signer) -> dict:
@@ -217,7 +227,7 @@ def envelope_page(envelope_id: int, n: int, user: User = Depends(current_user), 
     path = envelope_dir(env.id) / "pages" / f"{n}.png"
     if not path.exists():
         raise HTTPException(404, "Page not found")
-    return FileResponse(path, media_type="image/png")
+    return _file(path, "image/png")
 
 
 class SignerIn(BaseModel):
@@ -280,8 +290,9 @@ def save_draft(envelope_id: int, body: DraftIn, user: User = Depends(current_use
     for f in body.fields:
         if f.type not in FIELD_TYPES:
             raise HTTPException(400, f"Unknown field type '{f.type}'")
-        if (f.type == "radio") != bool(f.group_id):
-            raise HTTPException(400, f"Field {f.id}: radio options need a group (and only radio options have one)")
+        if (f.type == "radio" and not f.group_id) or (f.group_id and f.type not in ("radio", "checkbox")):
+            raise HTTPException(400, f"Field {f.id}: radio options need a group; only radio options and checkboxes "
+                                     "can have one")
         if f.filled_by not in ("signer", "sender"):
             raise HTTPException(400, f"Field {f.id}: filled_by must be 'signer' or 'sender'")
         if f.signer_id is not None and f.signer_id not in signer_keys:
@@ -421,7 +432,7 @@ def envelope_final(envelope_id: int, user: User = Depends(current_user), db: Ses
     env = _own_envelope(db, envelope_id, user)
     if not env.final_pdf_path:
         raise HTTPException(404, "The signed PDF is available once everyone has signed")
-    return FileResponse(env.final_pdf_path, media_type="application/pdf", filename=_signed_name(env.filename))
+    return _file(env.final_pdf_path, "application/pdf", _signed_name(env.filename))
 
 
 def _signed_name(filename: str) -> str:
@@ -445,7 +456,7 @@ def signing_view(token: str, db: Session = Depends(get_session)):
     owner = db.get(User, env.owner_id)
     fields = _fields(db, env.id)
     return {
-        "envelope": {"filename": env.filename, "doc_type": env.document.get("doc_type"), "status": env.status,
+        "envelope": {"id": env.id, "filename": env.filename, "doc_type": env.document.get("doc_type"), "status": env.status,
                      "sender_email": owner.email if owner else None},
         "signer": {"id": s.key, "label": s.label, "name": s.name, "email": s.email, "status": s.status,
                    "is_self": s.is_self, "envelope_id": env.id if s.is_self else None,
@@ -472,7 +483,7 @@ def signing_page(token: str, n: int, db: Session = Depends(get_session)):
     path = envelope_dir(env.id) / "pages" / f"{n}.png"
     if not path.exists():
         raise HTTPException(404, "Page not found")
-    return FileResponse(path, media_type="image/png")
+    return _file(path, "image/png")
 
 
 class SignIn(BaseModel):
@@ -538,7 +549,7 @@ def signing_final(token: str, db: Session = Depends(get_session)):
     s, env = _by_token(db, token)
     if not env.final_pdf_path:
         raise HTTPException(404, "The signed PDF is available once everyone has signed")
-    return FileResponse(env.final_pdf_path, media_type="application/pdf", filename=_signed_name(env.filename))
+    return _file(env.final_pdf_path, "application/pdf", _signed_name(env.filename))
 
 
 # ---------- questions about the document (sender and signers; history lives in the client) ----------
@@ -681,4 +692,6 @@ if FRONTEND_DIST.exists():
         if path.startswith("api/"):
             raise HTTPException(404, "Not found")
         file = FRONTEND_DIST / path
-        return FileResponse(file if path and file.is_file() else FRONTEND_DIST / "index.html")
+        if path and file.is_file():
+            return FileResponse(file)
+        return _file(FRONTEND_DIST / "index.html", "text/html")  # after a rebuild, never serve a stale page

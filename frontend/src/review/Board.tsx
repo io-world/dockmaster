@@ -29,6 +29,7 @@ import {
   restoreRejected,
   setFieldType,
   setFieldValue,
+  setGroupName,
   setRadioChoice,
   setRadioGroup,
   setSelf,
@@ -320,6 +321,8 @@ export default function Board({
       index: options.findIndex((o) => o.id === f.id),
       count: options.length,
       name: groupName(options),
+      question: options.find((o) => o.description)?.description ?? "",
+      onRename: (name) => apply(setGroupName(f.group_id!, name)),
       groups: [...others].map(([id, opts]) => ({ id, name: groupName(opts) })),
       onGroup: (g) => apply(setRadioGroup(f.id, g ?? newGroupId())),
     };

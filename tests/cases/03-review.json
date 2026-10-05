@@ -1,0 +1,347 @@
+{
+  "area": "Review: checking and correcting the proposal",
+  "cases": [
+    {
+      "id": "REV-01",
+      "title": "Fill in signer details",
+      "covers": [
+        "R-SIGNERS"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "AI-01 done (NDA open in Review)"
+      ],
+      "steps": [
+        "In the first signer's section, type person_a's name into \"Full name\" and email into \"Email\"",
+        "In the second signer's section, type person_b's name into \"Full name\" and email into \"Email\"",
+        "Wait a second"
+      ],
+      "expected": [
+        "Section titles and drop-bar chips change to the typed names",
+        "The red \"needs name & email\" badges disappear",
+        "\"All changes saved\" appears at the top"
+      ]
+    },
+    {
+      "id": "REV-02",
+      "title": "Card and box find each other",
+      "covers": [
+        "R-REVIEW-EDIT"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "Click any field card",
+        "Check the page preview",
+        "Click a different box on the page preview",
+        "Check the board on the left"
+      ],
+      "expected": [
+        "Clicking a card scrolls the preview to its box and pulses it",
+        "Clicking a box opens its section, scrolls to its card and highlights it"
+      ]
+    },
+    {
+      "id": "REV-03",
+      "title": "Resolve Needs review",
+      "covers": [
+        "R-AI-HONEST",
+        "R-REVIEW-EDIT"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "Click the \"Needs review\" chip",
+        "For a card with \"Who does this belong to?\", choose a signer in that menu",
+        "For a card with \"Looks right\", read the AI's reason and click \"Looks right\""
+      ],
+      "expected": [
+        "Each card leaves Needs review and appears in the chosen signer's section, marked \"Checked by you\"",
+        "Its box on the page becomes solid (not dashed) and takes the signer's colour",
+        "When the section is empty it says \"Nothing left to review.\""
+      ]
+    },
+    {
+      "id": "REV-04",
+      "title": "Move a field to another person (drag and menu)",
+      "covers": [
+        "R-REVIEW-EDIT"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "Drag a card from the first signer's section onto the second signer's chip in the drop bar",
+        "On another card, choose the second signer in \"Move to…\""
+      ],
+      "expected": [
+        "Both cards now appear in the second signer's section and the chip counts update",
+        "The boxes on the page change to the second signer's colour"
+      ]
+    },
+    {
+      "id": "REV-05",
+      "title": "Change a field's type",
+      "covers": [
+        "R-REVIEW-EDIT",
+        "R-TYPES"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "On a Text card, choose \"Date\" in the type menu"
+      ],
+      "expected": [
+        "The card and its box tag show the date icon",
+        "\"All changes saved\" appears"
+      ]
+    },
+    {
+      "id": "REV-06",
+      "title": "Move and resize a box on the page",
+      "covers": [
+        "R-REVIEW-EDIT"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "Drag a box on the page preview a little to the right",
+        "Drag its bottom-right corner to make it bigger",
+        "Reload the page"
+      ],
+      "expected": [
+        "The box stays where you put it, at the new size, after reloading"
+      ]
+    },
+    {
+      "id": "REV-07",
+      "title": "Add a field by clicking the page",
+      "covers": [
+        "R-REVIEW-EDIT"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "Click \"+ Add field\"",
+        "Click an empty spot on the page preview",
+        "Choose \"Text\" in \"Type\"",
+        "Choose person_b in \"Who it belongs to\"",
+        "Click \"Add field\""
+      ],
+      "expected": [
+        "A new box appears where you clicked",
+        "A new card appears in person_b's section, labelled \"Added by you\""
+      ]
+    },
+    {
+      "id": "REV-08",
+      "title": "Remove a field and bring it back",
+      "covers": [
+        "R-REVIEW-EDIT"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "On any card, click \"Not a field\"",
+        "Click the \"Not a field\" chip",
+        "On that card, choose person_a in \"Make a field for…\""
+      ],
+      "expected": [
+        "After the first click the box disappears and the card moves to \"Not a field\"",
+        "After restoring, the field is back at the same place, in person_a's section"
+      ]
+    },
+    {
+      "id": "REV-09",
+      "title": "Add and remove a signer",
+      "covers": [
+        "R-SIGNERS"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "Click \"+ Add signer\"",
+        "Type person_c's name and email into the new section",
+        "Move one field to person_c",
+        "In person_c's section, click \"Remove signer\""
+      ],
+      "expected": [
+        "A third section and chip appear",
+        "After removing, person_c's field goes to \"Needs review\" instead of disappearing"
+      ]
+    },
+    {
+      "id": "REV-10",
+      "title": "Pre-fill a field for a participant",
+      "covers": [
+        "R-PREFILL"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "REV-01 done"
+      ],
+      "steps": [
+        "On one of person_b's text cards (e.g. a name or company field), type \"Northwind Traders Inc.\" into \"Pre-fill (optional)\"",
+        "Check the page preview",
+        "Check the card under the input"
+      ],
+      "expected": [
+        "The text appears inside the box on the page as you type, in dark blue",
+        "The card says \"Locked for <person_b's name> when they sign.\"",
+        "Signature and initials cards have no pre-fill input"
+      ]
+    },
+    {
+      "id": "REV-11",
+      "title": "Pre-select a radio option and pre-tick a checkbox",
+      "covers": [
+        "R-PREFILL",
+        "R-TYPES"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "AI-04 done (services_choices open in Review)",
+        "Signer names entered"
+      ],
+      "steps": [
+        "On a \"Radio option\" card, click \"Pre-select this option (optional)\"",
+        "On another option of the same choice, click \"Pre-select this option (optional)\"",
+        "On the Checkbox card, tick \"Pre-tick it (optional)\""
+      ],
+      "expected": [
+        "Only the second option shows \"Pre-selected\" (one per choice) and a dot on the page",
+        "The checkbox box shows an X on the page"
+      ]
+    },
+    {
+      "id": "REV-12",
+      "title": "Radio options move together",
+      "covers": [
+        "R-TYPES",
+        "R-REVIEW-EDIT"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "AI-04 done",
+        "Two signers named"
+      ],
+      "steps": [
+        "On one \"Radio option\" card, choose the other signer in \"Move to…\""
+      ],
+      "expected": [
+        "All options of that choice move to the other signer, not just the one card"
+      ]
+    },
+    {
+      "id": "REV-13",
+      "title": "Reset to AI suggestions",
+      "covers": [
+        "R-REVIEW-RESET"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "REV-04, REV-07 and REV-10 done (fields moved, added and pre-filled)"
+      ],
+      "steps": [
+        "Click \"Reset to AI suggestions\"",
+        "Read the dialog and click \"Reset\"",
+        "Reload the page"
+      ],
+      "expected": [
+        "Fields are back with the people the AI chose, at the AI's positions",
+        "The field you added is gone; removed fields are back",
+        "Signer names, emails and the pre-filled value are kept",
+        "It is still like this after reloading"
+      ]
+    },
+    {
+      "id": "REV-14",
+      "title": "AI summary panel",
+      "covers": [
+        "R-AI-HONEST"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "AI-01 done"
+      ],
+      "steps": [
+        "Click \"Minimise\" on \"AI summary & questions\"",
+        "Reload the page",
+        "Click \"Expand\""
+      ],
+      "expected": [
+        "Minimised, the one-line summary and the note count stay visible",
+        "It stays minimised after reloading",
+        "Notes refer to pages and labels, never to ids like c12"
+      ]
+    },
+    {
+      "id": "REV-15",
+      "title": "Add a group of radio options or checkboxes in one go",
+      "covers": [
+        "R-REVIEW-EDIT",
+        "R-TYPES"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "A document open in Review with signer names entered"
+      ],
+      "steps": [
+        "Click \"+ Add field\" and click an empty spot on the page",
+        "Choose \"Radio option\" in \"Type\"",
+        "Type \"3\" into \"How many options?\" and choose a signer in \"Who it belongs to\"",
+        "Check \"Choice name\" (it says \"Choice N\"); type \"Billing frequency\" instead",
+        "Click \"Add field\"",
+        "Drag the bottom-right corner of the dashed frame to make it wider",
+        "Drag the corner left and down so the frame is taller than wide",
+        "Drag the middle of the frame to another spot"
+      ],
+      "expected": [
+        "Three option boxes appear in a row inside one dashed frame, with three \"Option N of 3\" cards in the signer's section",
+        "Each option card says \"Choice: Billing frequency\"",
+        "Wider: the three options spread out evenly",
+        "Taller than wide: they line up in a column, evenly spaced",
+        "Dragging the frame moves all three together",
+        "Doing the same with \"Checkbox\" and \"4\" gives four checkboxes in their own frame"
+      ],
+      "notes": "Options the AI found on the document's own markers keep individual boxes (no frame)."
+    },
+    {
+      "id": "REV-16",
+      "title": "Rename a radio choice",
+      "covers": [
+        "R-REVIEW-EDIT",
+        "R-TYPES"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "A document in Review with a radio choice (added by you or found by the AI)"
+      ],
+      "steps": [
+        "On any option card of the choice, type \"Payment method\" into the \"Name this choice\" box",
+        "Look at the other option cards of the same choice",
+        "On an option of a different choice, open the \"Choice: …\" menu"
+      ],
+      "expected": [
+        "Every option of the choice now says \"Choice: Payment method\"",
+        "The other choice's menu offers \"Move to: Payment method\"",
+        "After reloading, the name is still there"
+      ]
+    }
+  ]
+}

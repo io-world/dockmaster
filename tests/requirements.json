@@ -1,0 +1,131 @@
+{
+  "about": "Testing requirements for DockMaster. Sources: the project brief (Core, Next, Optional, assessment criteria) and decisions logged in DECISIONS.md.",
+  "requirements": [
+    {
+      "id": "R-AUTH",
+      "title": "Account creation and sign-in",
+      "source": "Brief, Core 1",
+      "requirement": "Anyone can create an account with an email and password, sign in, and sign out.",
+      "acceptance": ["Sign-up works from a private browser window", "Wrong password shows a plain message", "Signing out returns to the sign-in page"]
+    },
+    {
+      "id": "R-UPLOAD",
+      "title": "Upload a PDF",
+      "source": "Brief, Core 2",
+      "requirement": "The sender uploads a PDF from the Inbox and lands on the Review screen. Bad files are rejected with a plain message.",
+      "acceptance": ["Progress text is shown while the AI works", "Non-PDF, damaged and password-protected files get a clear message and nothing is half-created"]
+    },
+    {
+      "id": "R-AI-PROPOSAL",
+      "title": "The AI proposes the whole setup",
+      "source": "Brief, Core 3 (assessment: 30%)",
+      "requirement": "For a document it has never seen, the AI proposes the parties, one signer per signature block, every field with its type, owner and page position, and blanks that are not fields.",
+      "acceptance": ["Signers match the document's signature blocks", "Signature, name, title and date of one block belong to the same signer", "Boxes sit on the document's blanks", "Table borders and underlined headings are listed under \"Not a field\" with a reason"]
+    },
+    {
+      "id": "R-AI-HONEST",
+      "title": "Being wrong is visible and cheap to fix",
+      "source": "Brief, assessment: 15%",
+      "requirement": "Low-confidence, guessed-position or unowned fields are shown first in \"Needs review\" with the AI's reason. The AI summary lists what it couldn't do. Nothing is shown with confidence it hasn't earned.",
+      "acceptance": ["Needs review lists uncertain fields with reasons", "Dashed boxes mark fields that need review", "The AI summary panel shows notes in plain language (no internal ids like c12)"]
+    },
+    {
+      "id": "R-REVIEW-EDIT",
+      "title": "Accept, correct, add or remove anything",
+      "source": "Brief, Core 4",
+      "requirement": "The sender can accept a field, change who it belongs to, change its type, move and resize its box, add a field, remove a field (Not a field) and restore it.",
+      "acceptance": ["Every change autosaves (\"All changes saved\")", "A correction takes fewer steps than building the field from scratch"]
+    },
+    {
+      "id": "R-REVIEW-RESET",
+      "title": "Reset to AI suggestions",
+      "source": "Owner request, 2026-10-03",
+      "requirement": "One button puts every field back to the AI's proposal (owner, type, box; removed fields return, added ones go) while keeping signer names, emails, \"This is me\" and pre-filled values.",
+      "acceptance": ["A confirmation dialog appears first", "The result survives a page reload"]
+    },
+    {
+      "id": "R-PREFILL",
+      "title": "Optional, locked pre-fill",
+      "source": "Owner request, 2026-10-04",
+      "requirement": "Every field belongs to a participant. The sender may pre-fill any non-signature field for any participant; it shows live on the page and is locked for that participant. Blank fields are completed by the participant.",
+      "acceptance": ["Pre-filled values show on the Review page as typed", "On the signing page they are read-only", "The server keeps them even if a different value is submitted", "Signatures can never be pre-filled"]
+    },
+    {
+      "id": "R-SIGNERS",
+      "title": "Designate signers: self only, self plus others, others only",
+      "source": "Brief, Core 5",
+      "requirement": "The sender enters a name and email per signer, can add or remove signers, and can mark one signer \"This is me\".",
+      "acceptance": ["All three combinations can be sent and completed"]
+    },
+    {
+      "id": "R-SEND",
+      "title": "Send is safe",
+      "source": "Brief, Core 6; product instinct",
+      "requirement": "Send is blocked until every field has an owner and every signer has a name and a valid email. Fields still in Needs review can be sent only after a \"Send anyway\" confirmation.",
+      "acceptance": ["The checklist shows what blocks sending", "The server refuses the same problems even if the page is bypassed"]
+    },
+    {
+      "id": "R-SIGN",
+      "title": "Signers complete the document",
+      "source": "Brief, Core 6",
+      "requirement": "Each signer opens their link without an account, fills only their own fields, and clicks Finish. If the sender is a signer, they sign right after sending.",
+      "acceptance": ["\"Next field\" moves through what's left", "Finish stays disabled until every required field is done", "Other people's fields are shown but not editable"]
+    },
+    {
+      "id": "R-TYPES",
+      "title": "Field types: signature, text, checkbox, radio (plus initials and date)",
+      "source": "Brief, Core 6",
+      "requirement": "Signature and initials can be typed into the box (script font) or drawn. Text and date are typed. A checkbox can be ticked on its own. Radio options form a choice where exactly one can be picked.",
+      "acceptance": ["Each type is stamped correctly into the final PDF"]
+    },
+    {
+      "id": "R-NOTIFY",
+      "title": "Notifications at the moments that matter",
+      "source": "Brief, Next 7",
+      "requirement": "Sent, your turn, signed and completed are recorded in an Outbox with working links (no real email). The sender can fix a recipient's email and resend; a changed email gets a new link and the old one stops working.",
+      "acceptance": ["Every party gets the completed entry", "Outbox links open the right signing page"]
+    },
+    {
+      "id": "R-COMPLETE",
+      "title": "Completion and download",
+      "source": "Brief, Core 6",
+      "requirement": "When everyone has signed, values and signatures are stamped into the PDF, the status becomes completed, and the signed PDF can be downloaded by the sender and by every signer.",
+      "acceptance": ["The signed PDF opens and shows every value at its box"]
+    },
+    {
+      "id": "R-INBOX",
+      "title": "Inbox and status",
+      "source": "Product instinct",
+      "requirement": "The Inbox lists every document with its status and \"x of y signed\". A document can be deleted (with confirmation). The Status page shows each signer's progress and the notifications.",
+      "acceptance": ["Deleting a sent document makes its signing links invalid"]
+    },
+    {
+      "id": "R-ASK",
+      "title": "Ask questions about the document",
+      "source": "Owner request, 2026-10-03",
+      "requirement": "The sender (Review) and each signer (signing page) can ask questions. Answers come from the document only, cite pages, decline off-topic questions, and say they are not legal advice.",
+      "acceptance": ["Page references scroll the preview to that page"]
+    },
+    {
+      "id": "R-COLD",
+      "title": "Works in someone else's hands",
+      "source": "Brief, assessment: 25%",
+      "requirement": "A person who has never seen DockMaster completes upload, review, send, sign and notify on a document they chose, without help.",
+      "acceptance": ["No step needs explanation from the builder", "Every loading and error state has text"]
+    },
+    {
+      "id": "R-LIVE",
+      "title": "Live URL",
+      "source": "Brief, What to submit",
+      "requirement": "The app runs in production mode (built frontend plus one backend process) at a public URL, and data survives a restart.",
+      "acceptance": ["Sign-up works from a private window on another network (e.g. a phone on mobile data)", "Documents are still there after the backend restarts"]
+    },
+    {
+      "id": "R-COST",
+      "title": "Cost is known and logged",
+      "source": "Brief, constraints",
+      "requirement": "Every AI call logs its tokens and cost. One document costs roughly $0.03-0.10 to process.",
+      "acceptance": ["backend/out/llm_calls.jsonl gets one line per AI call"]
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+{
+  "area": "Errors and edge cases",
+  "cases": [
+    {
+      "id": "ERR-01",
+      "title": "Upload a file that isn't a PDF",
+      "covers": [
+        "R-UPLOAD"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "Signed in",
+        "Document not_a_pdf on your computer"
+      ],
+      "steps": [
+        "Go to the Inbox",
+        "Click \"Upload new PDF\" and choose not_a_pdf"
+      ],
+      "expected": [
+        "A plain message asks for a PDF",
+        "No new row appears in the Inbox"
+      ]
+    },
+    {
+      "id": "ERR-02",
+      "title": "Upload a password-protected PDF",
+      "covers": [
+        "R-UPLOAD"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "Signed in",
+        "Document encrypted on your computer"
+      ],
+      "steps": [
+        "Click \"Upload new PDF\" and choose encrypted"
+      ],
+      "expected": [
+        "A plain message explains it can't be read",
+        "No half-created document is left in the Inbox"
+      ]
+    },
+    {
+      "id": "ERR-03",
+      "title": "AI step fails: a manual draft still works",
+      "covers": [
+        "R-AI-HONEST",
+        "R-COLD"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "A test server started WITHOUT a valid ANTHROPIC_API_KEY (never the live one)"
+      ],
+      "steps": [
+        "Upload nda_two_party",
+        "Read the AI summary",
+        "Add a signer and assign the fields by hand"
+      ],
+      "expected": [
+        "Review still opens, with every detected blank in \"Needs review\"",
+        "The summary says the AI step failed and fields must be assigned by hand",
+        "The document can still be sent and signed"
+      ]
+    },
+    {
+      "id": "ERR-04",
+      "title": "Invalid email is refused",
+      "covers": [
+        "R-SEND"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "A document open in Review"
+      ],
+      "steps": [
+        "Type \"casey@\" into a signer's \"Email\"",
+        "Check the checklist"
+      ],
+      "expected": [
+        "\"Enter a valid email\" shows under the field",
+        "\"Send\" stays blocked"
+      ]
+    },
+    {
+      "id": "ERR-05",
+      "title": "Autosave survives a refresh mid-edit",
+      "covers": [
+        "R-REVIEW-EDIT"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "A document open in Review"
+      ],
+      "steps": [
+        "Move a field to another signer",
+        "Wait for \"All changes saved\"",
+        "Reload the page"
+      ],
+      "expected": [
+        "The change is still there"
+      ]
+    },
+    {
+      "id": "ERR-06",
+      "title": "Tampered or random signing link",
+      "covers": [
+        "R-SIGN"
+      ],
+      "priority": "low",
+      "preconditions": [],
+      "steps": [
+        "Open <app address>/sign/not-a-real-token in a private window"
+      ],
+      "expected": [
+        "The page says \"This signing link is not valid\" (no crash, no data shown)"
+      ]
+    },
+    {
+      "id": "ERR-07",
+      "title": "Long document",
+      "covers": [
+        "R-UPLOAD",
+        "R-AI-PROPOSAL"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "Signed in",
+        "Document long on your computer"
+      ],
+      "steps": [
+        "Click \"Upload new PDF\" and choose long",
+        "Time how long until Review opens",
+        "Scroll through all pages of the preview"
+      ],
+      "expected": [
+        "Progress text stays visible the whole time; Review opens (expect up to about 1–2 minutes)",
+        "Fields on later pages are found and assigned"
+      ],
+      "notes": "Processing runs while you wait; there's no background queue (logged in DECISIONS.md)."
+    },
+    {
+      "id": "ERR-08",
+      "title": "A new upload never shows a deleted document's pages",
+      "covers": [
+        "R-UPLOAD",
+        "R-INBOX"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "Signed in",
+        "Two different PDFs (A and B)"
+      ],
+      "steps": [
+        "Upload A and look at its preview in Review",
+        "Go to the Inbox and delete A (click \"Delete\", then \"Delete\")",
+        "Upload B in the same browser tab",
+        "Look at every page of B's preview"
+      ],
+      "expected": [
+        "Every preview page shows B's content, never A's (even though B may get A's old number)"
+      ],
+      "notes": "Regression test for the cached-page bug fixed on 2026-10-04."
+    }
+  ]
+}

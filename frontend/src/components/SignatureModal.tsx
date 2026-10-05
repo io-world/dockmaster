@@ -54,12 +54,14 @@ export async function textSignaturePng(text: string): Promise<string | null> {
 export default function SignatureModal({
   kind,
   defaultName,
+  initialText,
   onDone,
   onCancel,
 }: {
   kind: "signature" | "initials";
   defaultName: string;
-  onDone: (png: string) => void;
+  initialText?: string; // what you typed last time for this kind (reused for the next box)
+  onDone: (png: string, typedText: string | null) => void;
   onCancel: () => void;
 }) {
   const initials = defaultName
@@ -67,8 +69,9 @@ export default function SignatureModal({
     .filter(Boolean)
     .map((w) => w[0]!.toUpperCase())
     .join("");
-  const [mode, setMode] = useState<"draw" | "type">("draw");
-  const [typed, setTyped] = useState(kind === "initials" ? initials : defaultName);
+  // Typing is the default: the box itself is too small to type or draw in comfortably.
+  const [mode, setMode] = useState<"draw" | "type">("type");
+  const [typed, setTyped] = useState(initialText ?? (kind === "initials" ? initials : defaultName));
   const [empty, setEmpty] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const padRef = useRef<SignaturePad | null>(null);
@@ -91,7 +94,7 @@ export default function SignatureModal({
 
   const done = async () => {
     const png = mode === "draw" ? (canvasRef.current ? trimmedPng(canvasRef.current) : null) : await typedPng();
-    if (png) onDone(png);
+    if (png) onDone(png, mode === "type" ? typed.trim() : null);
   };
 
   const canFinish = mode === "draw" ? !empty : typed.trim().length > 0;

@@ -3,11 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type Field, type SigningView } from "../api";
 import DocChat from "../components/DocChat";
 import PdfPreview, { type PreviewBox } from "../components/PdfPreview";
-import SignatureModal, { SCRIPT_FONT, textSignaturePng } from "../components/SignatureModal";
+import SignatureModal from "../components/SignatureModal";
 import { ErrorBox, Spinner } from "../components/ui";
 import { bboxToPx } from "../geometry";
 import { TYPE_LABEL } from "../review/model";
 import { Link } from "../router";
+import { useAuth } from "../auth";
 
 const today = () => {
   const d = new Date();
@@ -43,19 +44,17 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 export default function SignPage({ token }: { token: string }) {
+  const { user } = useAuth(); // set only when the sender opened this link in their own browser
   const [view, setView] = useState<SigningView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [signing, setSigning] = useState<Field | null>(null);
-  // Signatures typed straight into the box: the text per field. The field's value is that text rendered as a PNG.
-  const [typed, setTyped] = useState<Record<string, string>>({});
-  const typedRef = useRef(typed);
-  typedRef.current = typed;
-  const typeSignature = (id: string, text: string) => {
-    setTyped((cur) => ({ ...cur, [id]: text }));
-    textSignaturePng(text).then((png) => {
-      if (typedRef.current[id] === text) setValue(id, png ?? ""); // latest keystroke wins
-    });
+  // What you typed last time for each kind, so the next signature/initials box is one click.
+  const [adopted, setAdopted] = useState<{ signature?: string; initials?: string }>({});
+  /** Your name for a signature: what you typed in your own "Name" field, else the name the sender entered. */
+  const suggestedName = () => {
+    const nameField = mine.find((x) => x.type === "text" && /name/i.test(x.label) && (values[x.id] ?? "").trim());
+    return ((nameField && values[nameField.id]) || view?.signer.name || "").trim();
   };
   const [active, setActive] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -104,10 +103,7 @@ export default function SignPage({ token }: { token: string }) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      // Render any typed signature now, in case its image from the last keystroke isn't ready yet.
-      const out = { ...values };
-      for (const [id, text] of Object.entries(typed)) out[id] = (await textSignaturePng(text)) ?? "";
-      await api.submitSigning(token, Object.fromEntries(mine.map((f) => [f.id, out[f.id] ?? null])));
+      await api.submitSigning(token, Object.fromEntries(mine.map((f) => [f.id, values[f.id] ?? null])));
       setDone(true);
       load();
     } catch (e) {
@@ -136,30 +132,33 @@ export default function SignPage({ token }: { token: string }) {
     </a>
   );
 
+  const isSender = !!user && !!view.envelope.sender_email && user.email === view.envelope.sender_email;
+
   // Already signed (just now, or opened again later).
   if (done || view.signer.status === "signed")
     return (
       <Shell>
         <div className="space-y-3 rounded border bg-white p-6" data-testid="signed-confirmation">
           <h1 className="text-lg font-semibold">✓ You've signed {view.envelope.filename}</h1>
-          {view.signer.is_self && view.signer.envelope_id ? (
-            <>
-              <p className="text-gray-700">
-                {view.envelope.status === "completed" ? "Everyone has signed." : "The other signers have been notified."}
-              </p>
-              <Link to={`/envelopes/${view.signer.envelope_id}/status`} className="inline-block rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white">
-                Track it on the Status page
+          <p className="text-gray-700">
+            {view.envelope.status === "completed"
+              ? "Everyone has signed. The completed document is ready."
+              : view.signer.is_self
+                ? "The other signers have been notified."
+                : `We'll let ${view.envelope.sender_email ?? "the sender"} know. The completed PDF will be available here once everyone has signed.`}
+          </p>
+          {view.envelope.status === "completed" && download}
+          {/* The sender, signed in (e.g. they opened this link from their Outbox): a way back into the app.
+              Recipients in their own browser aren't signed in and don't see these. */}
+          {isSender && (
+            <div className="flex flex-wrap gap-2 border-t pt-3 text-sm">
+              <Link to="/outbox" className="rounded border border-gray-300 px-3 py-1.5 font-medium hover:bg-gray-50">
+                ← Back to Outbox
               </Link>
-            </>
-          ) : view.envelope.status === "completed" ? (
-            <>
-              <p className="text-gray-700">Everyone has signed. The completed document is ready.</p>
-              {download}
-            </>
-          ) : (
-            <p className="text-gray-700">
-              We'll let {view.envelope.sender_email ?? "the sender"} know. The completed PDF will be available here once everyone has signed.
-            </p>
+              <Link to={`/envelopes/${view.envelope.id}/status`} className="rounded border border-gray-300 px-3 py-1.5 font-medium hover:bg-gray-50">
+                View document status
+              </Link>
+            </div>
           )}
         </div>
       </Shell>
@@ -208,6 +207,7 @@ export default function SignPage({ token }: { token: string }) {
     const ring = active === f.id ? "ring-2 ring-blue-400" : "";
     const border = filled ? "border-green-600 bg-green-50/40" : f.required ? "border-amber-500 bg-amber-50/70" : "border-blue-400 bg-blue-50/50";
     const fontSize = Math.max(8, Math.min(r.height * 0.7, 14));
+    const compact = r.width < 70; // e.g. a small initials box
     if (f.locked)
       // Pre-filled by the sender: shown as it will be stamped, not editable.
       return (
@@ -225,32 +225,20 @@ export default function SignPage({ token }: { token: string }) {
     return (
       <div key={b.id} data-box-id={f.id} className={`absolute ${f.type === "radio" ? "rounded-full" : "rounded-sm"} border-2 ${border} ${ring}`} style={pos} onClick={() => setActive(f.id)}>
         {(f.type === "signature" || f.type === "initials") &&
-          (v && typed[f.id] === undefined ? (
-            // A drawn signature: show it; click to change.
+          (v ? (
+            // The adopted signature, scaled to fit the box; click to change.
             <button className="h-full w-full" onClick={() => setSigning(f)} title="Change">
-              <img src={v} alt="Your signature" className="h-full w-full object-contain object-left" />
+              <img src={v} alt={f.type === "initials" ? "Your initials" : "Your signature"} className={`h-full w-full object-contain ${f.type === "initials" ? "object-center" : "object-left"}`} />
             </button>
           ) : (
-            <>
-              <input
-                data-testid="sig-input"
-                value={typed[f.id] ?? ""}
-                onChange={(e) => typeSignature(f.id, e.target.value)}
-                onFocus={() => setActive(f.id)}
-                placeholder={f.type === "initials" ? "Type initials" : "Type your name to sign"}
-                aria-label={f.type === "initials" ? "Your initials" : "Your signature (type your name)"}
-                className="block h-full w-full bg-transparent pl-1 pr-12 text-[#0b2a6f] outline-none placeholder:font-sans placeholder:text-xs placeholder:font-medium placeholder:text-amber-800"
-                style={{ fontFamily: SCRIPT_FONT, fontSize: Math.max(12, Math.min(r.height * 0.8, 30)) }}
-              />
-              <button
-                data-testid="sig-draw"
-                onClick={() => setSigning(f)}
-                title="Draw your signature instead"
-                className="absolute right-0.5 top-1/2 -translate-y-1/2 rounded bg-white/80 px-1 text-[10px] text-blue-700 hover:underline"
-              >
-                ✎ Draw
-              </button>
-            </>
+            <button
+              data-testid="sig-open"
+              className="h-full w-full overflow-hidden whitespace-nowrap px-0.5 text-left font-medium text-amber-800"
+              style={{ fontSize: Math.max(8, Math.min(r.height * 0.6, 13)) }}
+              onClick={() => setSigning(f)}
+            >
+              {f.type === "initials" ? (compact ? "Initial" : "Initial here") : "Sign here"}
+            </button>
           ))}
         {(f.type === "text" || f.type === "date") && (
           <input
@@ -376,10 +364,11 @@ export default function SignPage({ token }: { token: string }) {
       {signing && (
         <SignatureModal
           kind={signing.type === "initials" ? "initials" : "signature"}
-          defaultName={view.signer.name ?? ""}
+          defaultName={suggestedName()}
+          initialText={signing.type === "initials" ? adopted.initials : adopted.signature}
           onCancel={() => setSigning(null)}
-          onDone={(png) => {
-            setTyped(({ [signing.id]: _drop, ...rest }) => rest); // a drawn signature replaces typed text
+          onDone={(png, text) => {
+            if (text) setAdopted((a) => ({ ...a, [signing.type === "initials" ? "initials" : "signature"]: text }));
             setValue(signing.id, png);
             setSigning(null);
           }}

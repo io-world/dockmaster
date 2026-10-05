@@ -1,0 +1,227 @@
+{
+  "area": "Signing (recipients, no account)",
+  "cases": [
+    {
+      "id": "SIGN-01",
+      "title": "Open a signing link with no account",
+      "covers": [
+        "R-SIGN",
+        "R-NOTIFY"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "SEND-03 done"
+      ],
+      "steps": [
+        "Go to the Outbox",
+        "On person_b's \"your turn\" entry, open \"Open signing page as this recipient ↗\" in a private window"
+      ],
+      "expected": [
+        "The signing page opens without asking to sign in",
+        "It says who asked you to sign and the file name",
+        "Only person_b's fields are highlighted; other people's are grey and can't be clicked",
+        "The top shows \"N fields left\""
+      ]
+    },
+    {
+      "id": "SIGN-02",
+      "title": "Sign by typing your name (dialog)",
+      "covers": [
+        "R-SIGN",
+        "R-TYPES"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "SIGN-01 done"
+      ],
+      "steps": [
+        "Click \"Next field\" until a \"Sign here\" box is highlighted",
+        "Click \"Sign here\"",
+        "Check the dialog",
+        "Click \"Apply\""
+      ],
+      "expected": [
+        "The dialog opens on \"Type your name\", already filled with your name (your own \"Name\" field if you filled it, else the name the sender entered), with a large handwriting-style preview",
+        "After Apply the signature appears in the box, scaled to fit",
+        "The box turns green and \"fields left\" goes down by one"
+      ]
+    },
+    {
+      "id": "SIGN-02b",
+      "title": "Initials fit a small box",
+      "covers": [
+        "R-SIGN",
+        "R-TYPES"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "A sent document with an initials box for this signer",
+        "Signing page open"
+      ],
+      "steps": [
+        "Type \"Casey J. Lee\" into your \"Name:\" field",
+        "Click the \"Initial here\" (or \"Initial\") box",
+        "Change the text to \"CL\" if you like",
+        "Click \"Apply\""
+      ],
+      "expected": [
+        "The dialog is pre-filled with \"CJL\"",
+        "The initials appear centred in the small box, scaled to fit",
+        "The next initials box opens pre-filled with what you used last"
+      ]
+    },
+    {
+      "id": "SIGN-03",
+      "title": "Draw a signature instead",
+      "covers": [
+        "R-SIGN",
+        "R-TYPES"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "SIGN-01 done (or another signer's page)"
+      ],
+      "steps": [
+        "Click a \"Sign here\" box",
+        "Click the \"Draw\" tab in the dialog",
+        "Draw a squiggle on the pad",
+        "Click \"Apply\""
+      ],
+      "expected": [
+        "The drawing appears in the box, scaled to fit",
+        "Clicking it again reopens the dialog to change it"
+      ]
+    },
+    {
+      "id": "SIGN-04",
+      "title": "Fill text, date and checkbox fields, then finish",
+      "covers": [
+        "R-SIGN",
+        "R-TYPES"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "SIGN-02 done"
+      ],
+      "steps": [
+        "Click \"Next field\" and type into each highlighted text box",
+        "Check that date fields already hold today's date (change one if you like)",
+        "Check that \"Finish\" stays greyed out while fields are left",
+        "When it says \"All required fields done\", click \"Finish\""
+      ],
+      "expected": [
+        "Typed text sits above the document's underline, not crossed by it",
+        "After Finish: \"✓ You've signed …\"",
+        "Opening the same link again shows the same confirmation, not the form"
+      ]
+    },
+    {
+      "id": "SIGN-05",
+      "title": "Radio choice allows exactly one option",
+      "covers": [
+        "R-TYPES"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "services_choices sent (radio choices belong to this signer, none pre-selected)",
+        "Signing page open"
+      ],
+      "steps": [
+        "In one question, click the first option",
+        "In the same question, click the third option",
+        "Leave another required question unanswered and check \"Finish\""
+      ],
+      "expected": [
+        "Only the third option shows a dot; the first is cleared",
+        "\"Finish\" stays greyed out until every required question has an answer",
+        "Each question counts once in \"fields left\", not once per option"
+      ]
+    },
+    {
+      "id": "SIGN-06",
+      "title": "Pre-filled fields are locked",
+      "covers": [
+        "R-PREFILL"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "REV-10 and/or REV-11 done before sending",
+        "Open the signing link of the person the values were pre-filled for"
+      ],
+      "steps": [
+        "Find the pre-filled box",
+        "Try to click into it and type"
+      ],
+      "expected": [
+        "The value is shown in a grey dashed box (hover says \"Filled in by the sender\")",
+        "It can't be changed, and it isn't counted in \"fields left\"",
+        "After Finish, the final PDF shows the pre-filled value, not anything else"
+      ]
+    },
+    {
+      "id": "SIGN-07",
+      "title": "Values from earlier signers are visible to later ones",
+      "covers": [
+        "R-SIGN"
+      ],
+      "priority": "low",
+      "preconditions": [
+        "person_a has signed; person_b has not"
+      ],
+      "steps": [
+        "Open person_b's signing link",
+        "Look at person_a's text fields on the page"
+      ],
+      "expected": [
+        "person_a's typed values are shown (read-only); their signature image is not"
+      ]
+    },
+    {
+      "id": "SIGN-08",
+      "title": "Everyone signs: completed and downloadable",
+      "covers": [
+        "R-COMPLETE",
+        "R-NOTIFY"
+      ],
+      "priority": "high",
+      "preconditions": [
+        "All but one signer have signed"
+      ],
+      "steps": [
+        "Sign as the last signer and click \"Finish\"",
+        "Click \"Download the signed PDF\"",
+        "Open the downloaded PDF"
+      ],
+      "expected": [
+        "The confirmation says \"Everyone has signed\"",
+        "The PDF shows every signature, text, date, tick and radio dot in its box",
+        "The sender's Status page shows \"completed\" and \"Download signed PDF\""
+      ]
+    },
+    {
+      "id": "SIGN-09",
+      "title": "Back to the Outbox after signing",
+      "covers": [
+        "R-SIGN",
+        "R-NOTIFY"
+      ],
+      "priority": "medium",
+      "preconditions": [
+        "Signed in as the sender",
+        "A sent document with an unsigned recipient"
+      ],
+      "steps": [
+        "Go to the Outbox",
+        "Click \"Open signing page as this recipient ↗\"",
+        "Complete the fields and click \"Finish\"",
+        "Click \"← Back to Outbox\"",
+        "Open the same signing link in a private window"
+      ],
+      "expected": [
+        "After Finish, the confirmation shows \"← Back to Outbox\" and \"View document status\"",
+        "\"← Back to Outbox\" opens the Outbox, now with a \"signed\" entry",
+        "In the private window (a real recipient) neither link is shown"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 // Pure updates to the Review draft. Every edit to a field marks it source: "user" (correction data).
-import type { Draft, Field, FieldType, Rejected, Signer } from "../api";
+import type { BBox, Draft, Field, FieldType, Rejected, Signer } from "../api";
 
 export type DraftUpdate = (d: Draft) => Draft;
 
@@ -8,11 +8,11 @@ export const editField = (id: string, patch: Partial<Field>): DraftUpdate => (d)
   fields: d.fields.map((f) => (f.id === id ? { ...f, ...patch, source: "user" } : f)),
 });
 
-/** The ids of a field's radio group (all options of one choice), or just the field. */
+/** The ids of a field's group (the options of a radio choice, or a set of checkboxes added together), or just it. */
 const groupIds = (d: Draft, id: string): Set<string> => {
   const f = d.fields.find((x) => x.id === id);
-  if (!f || f.type !== "radio" || !f.group_id) return new Set([id]);
-  return new Set(d.fields.filter((x) => x.type === "radio" && x.group_id === f.group_id).map((x) => x.id));
+  if (!f || !f.group_id) return new Set([id]);
+  return new Set(d.fields.filter((x) => x.group_id === f.group_id).map((x) => x.id));
 };
 
 /** Like editField, but a radio option's whole group gets the patch: one choice has one owner. */
@@ -199,3 +199,63 @@ export const resetToAi = (ai: Draft): DraftUpdate => (d) => {
     rejected: ai.rejected,
   };
 };
+
+// ---------- option groups the sender lays out (radio choices, sets of checkboxes) ----------
+
+export const OPTION_SIZE = 12; // points: one radio/checkbox marker
+const OPTION_GAP = 28; // points between markers when a group is first placed
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/** n markers spread evenly inside a frame: in a row when the frame is wider than tall, else in a column. */
+export function layoutOptions(frame: BBox, n: number): BBox[] {
+  const [x0, y0, x1, y1] = frame;
+  const w = x1 - x0;
+  const h = y1 - y0;
+  const row = w >= h;
+  const s = Math.min(OPTION_SIZE, row ? h : w);
+  return Array.from({ length: n }, (_, i): BBox => {
+    const t = n > 1 ? i / (n - 1) : 0.5;
+    const x = row ? x0 + t * (w - s) : x0 + (w - s) / 2;
+    const y = row ? y0 + (h - s) / 2 : y0 + t * (h - s);
+    return [r2(x), r2(y), r2(x + s), r2(y + s)];
+  });
+}
+
+/** The box around a group's markers. */
+export const frameOf = (opts: { bbox: BBox }[]): BBox => [
+  Math.min(...opts.map((o) => o.bbox[0])),
+  Math.min(...opts.map((o) => o.bbox[1])),
+  Math.max(...opts.map((o) => o.bbox[2])),
+  Math.max(...opts.map((o) => o.bbox[3])),
+];
+
+/** A first frame for n markers in a row, starting at the click and kept on the page. */
+export function defaultFrame(point: [number, number], n: number, page: { width: number; height: number }): BBox {
+  const w = Math.min(n * OPTION_SIZE + (n - 1) * OPTION_GAP, page.width);
+  const x0 = Math.max(0, Math.min(point[0], page.width - w));
+  const y0 = Math.max(0, Math.min(point[1] - OPTION_SIZE / 2, page.height - OPTION_SIZE));
+  return [r2(x0), r2(y0), r2(x0 + w), r2(y0 + OPTION_SIZE)];
+}
+
+/** A group the sender placed (every marker added by hand) is moved and resized as one frame. Groups the AI found
+ * keep their individual boxes: those sit on the document's own markers. */
+export const isFramedGroup = (opts: Field[]) =>
+  opts.length >= 2 && opts.every((o) => o.placement === "user" && (o.type === "radio" || o.type === "checkbox"));
+
+/** Move/resize a group's frame: its markers are re-spaced evenly inside it, keeping their order. */
+export const setGroupFrame = (groupId: string, frame: BBox): DraftUpdate => (d) => {
+  const opts = d.fields.filter((f) => f.group_id === groupId);
+  if (!opts.length) return d;
+  const [ox0, oy0, ox1, oy1] = frameOf(opts);
+  const wasRow = ox1 - ox0 >= oy1 - oy0;
+  const ordered = [...opts].sort((a, b) => (wasRow ? a.bbox[0] - b.bbox[0] || a.bbox[1] - b.bbox[1] : a.bbox[1] - b.bbox[1] || a.bbox[0] - b.bbox[0]));
+  const boxes = new Map(ordered.map((o, i) => [o.id, layoutOptions(frame, ordered.length)[i]]));
+  return { ...d, fields: d.fields.map((f) => (boxes.has(f.id) ? { ...f, bbox: boxes.get(f.id)!, source: "user" } : f)) };
+};
+
+/** Name a group (the question of a radio choice): every option's description. Not a review decision, so the
+ * options' source is left alone. */
+export const setGroupName = (groupId: string, name: string): DraftUpdate => (d) => ({
+  ...d,
+  fields: d.fields.map((f) => (f.group_id === groupId ? { ...f, description: name } : f)),
+});

@@ -170,7 +170,7 @@ export interface EnvelopeStatusView {
 }
 
 export interface SigningView {
-  envelope: { filename: string; doc_type: string | null; status: EnvelopeStatus; sender_email: string | null };
+  envelope: { id: number; filename: string; doc_type: string | null; status: EnvelopeStatus; sender_email: string | null };
   signer: {
     id: string;
     label: string;

@@ -11,7 +11,7 @@ corrects the proposal instead of building it from scratch.
 - Build for the general case. Never tune to specific test PDFs.
 - Effort cap: 10–15 hours. Prefer six things working over eleven half-built.
 
-## Current status (handoff — updated 2026-10-03, session 2)
+## Current status (handoff — updated 2026-10-04, session 3)
 Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libraries in `TECH_STACK.md`.
 
 **Done and verified**
@@ -27,6 +27,19 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
   Ask-the-document chat for the sender (Review panel) and signers (signing page); page links; prompt-cached; history not stored.
   Session 3 (2026-10-03): live "You fill" value preview on the page (superseded 10-04: no sender role; optional locked pre-fill per field); "Reset to AI suggestions" (`ai_draft` snapshot);
   radio buttons end to end (extract `src=radio`, AI `group`, `field.group_id` column via a tiny migration in `db.py`).
+- Session 3 (2026-10-04):
+  - No sender role: every field belongs to a participant; the sender may pre-fill any non-signature field in Review
+    (shown live on the page), and pre-filled values are locked for that participant (read-only, kept by the server).
+  - Signing: clicking a signature/initials box opens the dialog on "Type your name", pre-filled from the signer's own
+    "Name" field or the sender-entered name; Apply scales the image to fit the box. The signed-in sender gets
+    "← Back to Outbox" / "View document status" after signing.
+  - Outbox: "Edit email / Resend" (a changed email rotates the token).
+  - Review: radio/checkbox groups added in one go ("How many options?"), moved and resized as one dashed frame that
+    re-spaces the markers (row when wide, column when tall); radio choices have editable names.
+  - Bug fix: page images could show a deleted document's pages (SQLite reuses ids; no cache headers). Now `?v=` per
+    upload plus `Cache-Control: no-cache`.
+  - Docker removed: production is `npm run build` + one uvicorn process. `tests/` holds requirements and test cases (JSON).
+  - `SUBMISSION_README.md` (one page, for the CEO) is local only and gitignored.
 - Step 7: full journey passes end to end (`backend/scripts/e2e_journey.py`).
 - `score.py`: Sonnet 94% end-to-end on 4 labelled docs. Haiku rejected (77%, overconfident).
 - README.md and AI_TOOLING_NOTES.md drafted.
@@ -38,7 +51,7 @@ Read this first. Detailed reasoning for every choice is in `DECISIONS.md`; libra
    `--reload`). No Docker (removed 2026-10-04).
 2. **Unseen-PDF drill:** someone else picks documents and uses the app cold. Fix what breaks.
 3. **AI_TOOLING_NOTES.md:** the user adds their own reflections (marked "To finish (owner)").
-4. **5-minute recording.** Stop adding features by Sunday 4 Oct midday.
+4. **5-minute recording.** Feature freeze was Sunday 4 Oct midday; anything new now is a bug fix.
 5. Nice-to-haves if time allows: more varied labelled test PDFs (offer letter, 3-party agreement, existing form fields).
 
 **Known gaps (accepted, logged in DECISIONS):** radio detection on scans is image-only (no OpenCV circle finder); `FORMCHECKBOX` field-code checkboxes are
@@ -97,6 +110,7 @@ backend/
     score.py        # compare output to labeled ground truth
   test_pdfs/        # real-world docs + *.labels.json ground truth
 frontend/
+tests/              # testing requirements + plain-English test cases (JSON)
 DECISIONS.md        # every scope decision + cut, with reasoning and timestamp
 TECH_STACK.md       # libraries/services/tools used: version, purpose, GitHub repo, license
 AI_TOOLING_NOTES.md # what AI tools did, where I took over, what they got wrong
@@ -188,7 +202,9 @@ POST /api/outbox/{id}/resend {email}            resend a "your turn" link; a cha
 POST /api/envelopes/{id}/ask  |  POST /api/sign/{token}/ask   {question, history} -> {answer, meta}; doc-grounded Q&A, no storage
 ```
 Field values: text/date as text; checkbox/radio "true"/"false" (one "true" per radio group); signature/initials as a PNG data URL (transparent background).
-Field types: signature | initials | date | text | checkbox | radio (options share `group_id`; one owner per group). `filled_by: sender` fields are filled in Review.
+Field types: signature | initials | date | text | checkbox | radio (options share `group_id`; one owner per group; checkboxes
+added as a group share one for layout only). Every field belongs to a signer (`filled_by` is always "signer"; older
+"sender" fields count as unassigned). The sender may pre-fill non-signature fields in Review; they are locked when signing.
 Run the pipeline synchronously in the request (spinner in UI). No background job queue.
 PyMuPDF is not thread-safe: never share a document across threads.
 

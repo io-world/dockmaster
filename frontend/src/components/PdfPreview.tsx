@@ -23,6 +23,18 @@ interface EditProps {
   onBoxChange?: (id: string, bbox: BBox) => void; // makes boxes movable/resizable
   addMode?: boolean;
   onPageClick?: (c: PageClick) => void;
+  frames?: PreviewFrame[]; // groups of markers moved/resized as one (their boxes are drawn inside)
+  onFrameChange?: (id: string, bbox: BBox) => void;
+}
+
+/** A group of radio/checkbox markers laid out by the sender: one frame, the markers re-spaced inside it. */
+export interface PreviewFrame {
+  id: string;
+  page: number;
+  bbox: BBox;
+  color: string;
+  selectId: string; // the field a click on the frame selects
+  title?: string;
 }
 
 export interface PreviewBox {
@@ -35,6 +47,7 @@ export interface PreviewBox {
   title?: string;
   muted?: boolean; // e.g. other signers' fields on the signing page
   pulse?: boolean; // briefly animate (card -> box link)
+  inFrame?: boolean; // laid out by a PreviewFrame: drawn, but moved/resized through the frame
   content?: { kind: "text" | "check" | "radio"; value: string }; // preview of a filled value
 }
 
@@ -81,6 +94,8 @@ function PageView({
   onBoxChange,
   addMode,
   onPageClick,
+  frames = [],
+  onFrameChange,
 }: {
   page: Page;
   boxes: PreviewBox[];
@@ -147,7 +162,7 @@ function PageView({
               {b.label}
             </span>
           );
-          if (onBoxChange) {
+          if (onBoxChange && !b.inFrame) {
             // Editable: drag to move, handles to resize. Selection uses a normal click (also fires after a drag,
             // which simply selects the box that was moved).
             return (
@@ -185,7 +200,7 @@ function PageView({
               data-box-id={b.id}
               title={b.title}
               onClick={onBoxClick ? () => onBoxClick(b.id) : undefined}
-              className={`absolute ${onBoxClick ? "cursor-pointer" : ""} ${hi ? "z-10" : ""} ${b.pulse ? "box-pulse" : ""}`}
+              className={`absolute ${b.inFrame ? "pointer-events-none" : onBoxClick ? "cursor-pointer" : ""} ${hi ? "z-10" : ""} ${b.pulse ? "box-pulse" : ""}`}
               style={{ left: r.left, top: r.top, width: r.width, height: r.height, ...style }}
             >
               {b.content && <BoxContent content={b.content} bbox={b.bbox} scale={scale} />}
@@ -198,6 +213,40 @@ function PageView({
                 </span>
               )}
             </div>
+          );
+        })}
+      {scale > 0 &&
+        onFrameChange &&
+        frames.map((fr) => {
+          const r = bboxToPx(fr.bbox, scale);
+          const min = Math.max(6, 12 * scale);
+          return (
+            <Rnd
+              key={fr.id}
+              bounds="parent"
+              size={{ width: r.width, height: r.height }}
+              position={{ x: r.left, y: r.top }}
+              minWidth={min}
+              minHeight={min}
+              enableResizing={RESIZE_ENABLED}
+              resizeHandleStyles={RESIZE_HANDLES}
+              style={{ outline: `1.5px dashed ${fr.color}`, outlineOffset: 3 }}
+              onDragStop={(_e, d) => {
+                if (Math.abs(d.x - r.left) >= 1 || Math.abs(d.y - r.top) >= 1)
+                  onFrameChange(fr.id, pxToBbox({ left: d.x, top: d.y, width: r.width, height: r.height }, scale, page));
+              }}
+              onResizeStop={(_e, _dir, el, _delta, pos) =>
+                onFrameChange(fr.id, pxToBbox({ left: pos.x, top: pos.y, width: el.offsetWidth, height: el.offsetHeight }, scale, page))
+              }
+            >
+              <div
+                data-box-id={`frame:${fr.id}`}
+                data-frame-id={fr.id}
+                title={fr.title ?? "Drag to move the group; drag an edge to resize (options re-space; a tall frame makes a column)"}
+                className="h-full w-full cursor-move"
+                onClick={() => onBoxClick?.(fr.selectId)}
+              />
+            </Rnd>
           );
         })}
       <span className="absolute -left-1 top-1 -translate-x-full text-xs text-gray-400">{page.n}</span>
@@ -214,6 +263,8 @@ export default function PdfPreview({
   onBoxChange,
   addMode,
   onPageClick,
+  frames,
+  onFrameChange,
 }: {
   pages: Page[];
   boxes: PreviewBox[];
@@ -235,6 +286,8 @@ export default function PdfPreview({
           onBoxChange={onBoxChange}
           addMode={addMode}
           onPageClick={onPageClick}
+          frames={frames?.filter((f) => f.page === p.n)}
+          onFrameChange={onFrameChange}
         />
       ))}
     </div>

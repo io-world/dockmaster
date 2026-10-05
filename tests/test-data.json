@@ -1,0 +1,28 @@
+{
+  "about": "Data the test cases use. Use invented people and public or synthetic documents only; never real personal paperwork.",
+  "base_url": {
+    "local_production": "http://localhost:8000",
+    "local_development": "http://localhost:5173",
+    "live": "the public URL (port 80 forwarded to :8000)"
+  },
+  "accounts": [
+    { "key": "sender", "email": "sender1@example.test", "password": "test-pass-1", "note": "Create fresh for each full run (use sender2@, sender3@... on a shared server)." }
+  ],
+  "people": [
+    { "key": "person_a", "name": "Alex Morgan", "email": "alex@example.test" },
+    { "key": "person_b", "name": "Casey Lee", "email": "casey@example.test" },
+    { "key": "person_c", "name": "Jordan Park", "email": "jordan@example.test" },
+    { "key": "wrong_email", "email": "casey@exmaple.test", "note": "Deliberate typo, used by the resend test." }
+  ],
+  "documents": [
+    { "key": "nda_two_party", "what": "A 2-party mutual NDA (any public template)", "why": "Main journey: two signature blocks, names, titles, dates." },
+    { "key": "services_choices", "what": "A 1-page agreement with a preamble blank, a fee blank, a checkbox, 'choose one' questions (round markers) and two signature blocks", "why": "Radio, checkbox and pre-fill cases. Any synthetic document with these features works." },
+    { "key": "three_party", "what": "An agreement with three parties and three signature blocks", "why": "More than two signers; signer colours and sections." },
+    { "key": "scanned", "what": "A scanned (image-only) PDF of any agreement", "why": "No text layer: the AI must read it from the page image." },
+    { "key": "form_fields", "what": "A PDF with existing fillable form fields (text boxes, checkboxes or radio buttons)", "why": "Existing widgets should be taken as fields." },
+    { "key": "long", "what": "A contract of 10+ pages", "why": "Processing time and multi-page navigation." },
+    { "key": "no_blanks", "what": "A PDF with no blanks or signature lines (e.g. an article)", "why": "The AI should say it found nothing, not invent fields." },
+    { "key": "not_a_pdf", "what": "Any .docx or .png file", "why": "Upload should be refused with a plain message." },
+    { "key": "encrypted", "what": "A password-protected PDF", "why": "Upload should be refused with a plain message." }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "area": "Sending",
+  "cases": [
+    {
+      "id": "SEND-01",
+      "title": "Send is blocked until the setup is complete",
+      "covers": ["R-SEND"],
+      "priority": "high",
+      "preconditions": ["AI-01 done", "Signer names and emails NOT yet entered"],
+      "steps": [
+        "Check the button at the top right next to \"Send\"",
+        "Click it to open the checklist",
+        "Hover over the greyed-out \"Send\" button"
+      ],
+      "expected": [
+        "It says \"N to fix before sending\" in red",
+        "The checklist lists what is missing (names/emails, fields with no owner)",
+        "\"Send\" cannot be clicked"
+      ]
+    },
+    {
+      "id": "SEND-02",
+      "title": "Send anyway with fields still in Needs review",
+      "covers": ["R-SEND", "R-AI-HONEST"],
+      "priority": "medium",
+      "preconditions": ["Signer names and emails entered", "Every field has an owner", "At least one card still in Needs review (low confidence)"],
+      "steps": ["Check the checklist button", "Click \"Send anyway…\"", "Read the dialog", "Click \"Go back\""],
+      "expected": [
+        "The checklist button says \"N to review\" in amber",
+        "The dialog says how many fields the AI wasn't sure about",
+        "Going back sends nothing"
+      ]
+    },
+    {
+      "id": "SEND-03",
+      "title": "Send to others only",
+      "covers": ["R-SEND", "R-SIGNERS", "R-NOTIFY"],
+      "priority": "high",
+      "preconditions": ["REV-01 and REV-03 done", "No signer has \"This is me\" ticked", "Checklist says \"Ready to send\""],
+      "steps": ["Click \"Send\""],
+      "expected": [
+        "The Status page opens: both signers show \"Waiting for signature (link sent)\"",
+        "Notifications list \"sent\" to the sender and \"your turn\" to each signer"
+      ]
+    },
+    {
+      "id": "SEND-04",
+      "title": "Send with yourself as a signer",
+      "covers": ["R-SEND", "R-SIGNERS", "R-SIGN"],
+      "priority": "high",
+      "preconditions": ["A fresh upload in Review with signer details entered", "Tick \"This is me\" on one signer"],
+      "steps": ["Click \"Send\" (or \"Send anyway…\" then \"Send anyway\")"],
+      "expected": [
+        "Your own signing page opens straight away, with only your fields active",
+        "The other signer already has a \"your turn\" entry in the Outbox"
+      ]
+    },
+    {
+      "id": "SEND-05",
+      "title": "Self only",
+      "covers": ["R-SIGNERS"],
+      "priority": "medium",
+      "preconditions": ["A fresh upload in Review"],
+      "steps": [
+        "Remove every signer except one (\"Remove signer\")",
+        "Move every field to the remaining signer",
+        "Type your own name and the sender's email, tick \"This is me\"",
+        "Click \"Send\""
+      ],
+      "expected": [
+        "Your signing page opens",
+        "After you finish, the document is completed and \"Download signed PDF\" is available"
+      ]
+    },
+    {
+      "id": "SEND-06",
+      "title": "A sent document can't be edited",
+      "covers": ["R-SEND"],
+      "priority": "low",
+      "preconditions": ["SEND-03 done"],
+      "steps": ["Go to the Inbox", "Click the sent document"],
+      "expected": ["The Status page opens, not Review"]
+    }
+  ]
+}

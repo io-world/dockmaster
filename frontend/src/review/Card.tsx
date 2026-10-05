@@ -7,6 +7,8 @@ export interface RadioInfo {
   index: number; // 0-based
   count: number;
   name: string;
+  question: string; // the editable name of the choice ("" when it has none yet)
+  onRename: (name: string) => void;
   groups: { id: string; name: string }[]; // other choices on the same page
   onGroup: (groupId: string | null) => void; // null = a new choice of its own
 }
@@ -128,6 +130,15 @@ export function FieldCard({
             ))}
             <option value="__new">Make it a separate choice</option>
           </select>
+          <input
+            data-testid="radio-name"
+            value={radio.question}
+            onChange={(e) => radio.onRename(e.target.value)}
+            placeholder="Name this choice, e.g. Billing frequency"
+            aria-label="Choice name"
+            title="The question this choice answers. Renames every option of the choice."
+            className="mt-1 w-full rounded border px-2 py-1 text-sm"
+          />
         </div>
       )}
 

@@ -1,0 +1,95 @@
+{
+  "area": "Outbox, Status and Inbox",
+  "cases": [
+    {
+      "id": "OUT-01",
+      "title": "Every moment is in the Outbox",
+      "covers": ["R-NOTIFY"],
+      "priority": "high",
+      "preconditions": ["SIGN-08 done"],
+      "steps": ["Go to the Outbox", "Read the entries for this document from the bottom up"],
+      "expected": [
+        "\"sent\" to the sender, \"your turn\" to each signer, \"signed\" to the sender for each signature, and \"completed\" to the sender and every signer",
+        "Each entry shows recipient, subject, text and time",
+        "\"completed\" entries for signers open their download page"
+      ]
+    },
+    {
+      "id": "OUT-02",
+      "title": "Fix a wrong email and resend",
+      "covers": ["R-NOTIFY"],
+      "priority": "high",
+      "preconditions": ["A document sent with person_b's email typed as wrong_email", "person_b has not signed"],
+      "steps": [
+        "Go to the Outbox",
+        "On the newest \"your turn\" entry to wrong_email, click \"Edit email / Resend\"",
+        "Replace the email with person_b's correct email",
+        "Click \"Save & send new link\""
+      ],
+      "expected": [
+        "A new \"your turn\" entry to the correct email appears at the top",
+        "The old entry now says \"This link was replaced by a newer one (the email was changed).\"",
+        "Opening the old link shows \"This signing link is not valid\"; the new link opens the signing page",
+        "The Status page shows the corrected email"
+      ]
+    },
+    {
+      "id": "OUT-03",
+      "title": "Send a reminder",
+      "covers": ["R-NOTIFY"],
+      "priority": "medium",
+      "preconditions": ["OUT-02 done (or any unsigned recipient)"],
+      "steps": ["On the newest \"your turn\" entry, click \"Edit email / Resend\"", "Leave the email unchanged", "Click \"Resend\""],
+      "expected": [
+        "A new entry \"Reminder: please sign …\" appears with the same link",
+        "Only the newest entry for that person offers \"Edit email / Resend\""
+      ]
+    },
+    {
+      "id": "OUT-04",
+      "title": "No resend once signed",
+      "covers": ["R-NOTIFY"],
+      "priority": "low",
+      "preconditions": ["A recipient has signed"],
+      "steps": ["Go to the Outbox", "Look at that recipient's \"your turn\" entries"],
+      "expected": ["None of them offers \"Edit email / Resend\""]
+    },
+    {
+      "id": "INBOX-01",
+      "title": "Inbox shows status and progress",
+      "covers": ["R-INBOX"],
+      "priority": "medium",
+      "preconditions": ["At least one draft, one sent and one completed document"],
+      "steps": ["Go to the Inbox"],
+      "expected": [
+        "Each row shows file name, upload time, status (draft / sent / completed) and \"x of y signed\"",
+        "Clicking a draft opens Review; clicking a sent or completed one opens Status"
+      ]
+    },
+    {
+      "id": "INBOX-02",
+      "title": "Delete a sent document",
+      "covers": ["R-INBOX"],
+      "priority": "medium",
+      "preconditions": ["A sent document whose signing link you have copied"],
+      "steps": ["Go to the Inbox", "Click \"Delete\" on that row", "Read the dialog", "Click \"Delete\"", "Open the copied signing link"],
+      "expected": [
+        "The dialog warns that signing links will stop working",
+        "The row disappears",
+        "The link shows \"This signing link is not valid\""
+      ]
+    },
+    {
+      "id": "STATUS-01",
+      "title": "Status page follows progress",
+      "covers": ["R-INBOX", "R-SIGN"],
+      "priority": "medium",
+      "preconditions": ["SEND-04 done (you are a signer and haven't signed yet)"],
+      "steps": ["Go to the document's Status page", "Click \"Sign now\" on your row", "Sign and finish", "Return to the Status page"],
+      "expected": [
+        "Before: your row offers \"Sign now\"",
+        "After: your row says \"Signed\" with the time; the page updates by itself while others sign"
+      ]
+    }
+  ]
+}

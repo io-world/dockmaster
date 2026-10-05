@@ -43,7 +43,7 @@ receives has every candidate blank drawn as a red box labelled with its ID (`pro
 | Tool | Status |
 |---|---|
 | Tesseract OCR ([tesseract-ocr/tesseract](https://github.com/tesseract-ocr/tesseract)) | **Not used.** PyMuPDF's `get_textpage_ocr()` is still tried and is used automatically if Tesseract happens to be installed, but nothing depends on it. |
-| RapidOCR ([RapidAI/RapidOCR](https://github.com/RapidAI/RapidOCR)), PaddleOCR ([PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)) | **Considered, not used.** See DECISIONS.md (2026-10-01). |
+| RapidOCR ([RapidAI/RapidOCR](https://github.com/RapidAI/RapidOCR)), PaddleOCR ([PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)) | **Considered, not used.** See DECISIONS.md (2026-10-01). `rapidocr` and `onnxruntime` are still listed in `pyproject.toml` from that trial but never imported; removing them would only shrink the install. |
 
 ### Frontend (`frontend/`, npm via the project-local Node)
 

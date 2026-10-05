@@ -1,12 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type Draft, type EnvelopeDetail, type Field, type FieldType } from "../api";
 import Layout from "../components/Layout";
-import PdfPreview, { type PageClick, type PreviewBox } from "../components/PdfPreview";
+import PdfPreview, { type PageClick, type PreviewBox, type PreviewFrame } from "../components/PdfPreview";
 import { ConfirmDialog, ErrorBox, Spinner } from "../components/ui";
 import DocChat from "../components/DocChat";
 import Board from "../review/Board";
 import { checklist, type Checklist } from "../review/checklist";
-import { addField, DEFAULT_SIZE, moveFieldBox, newFieldId, newGroupId, resetToAi, type DraftUpdate } from "../review/draft";
+import {
+  addField,
+  DEFAULT_SIZE,
+  defaultFrame,
+  frameOf,
+  isFramedGroup,
+  layoutOptions,
+  moveFieldBox,
+  newFieldId,
+  newGroupId,
+  resetToAi,
+  setGroupFrame,
+  type DraftUpdate,
+} from "../review/draft";
 import { boxTag, FIELD_TYPES, fieldColor, groupName, needsReview, radioGroup, TYPE_LABEL } from "../review/model";
 
 /** Pre-filled values are drawn on the page the way they will be stamped. */
@@ -72,10 +85,11 @@ function AddFieldPopover({
   at: PageClick;
   signers: Draft["signers"];
   fields: Field[];
-  onAdd: (type: FieldType, target: string, groupId: string | null) => void;
+  onAdd: (type: FieldType, target: string, groupId: string | null, count: number, name: string) => void;
   onCancel: () => void;
 }) {
   const [type, setType] = useState<FieldType>("signature");
+  const [count, setCount] = useState(3); // radio options / checkboxes placed in one go
   const [target, setTarget] = useState(signers[0]?.id ?? "");
   const [group, setGroup] = useState<string>(""); // "" = a new choice
   // Radio: join an existing choice on this page (it keeps that choice's owner) or start a new one.
@@ -85,14 +99,36 @@ function AddFieldPopover({
     return [...seen].map(([id, f]) => ({ id, name: groupName(radioGroup(fields, f)) }));
   }, [fields, at.page]);
   const joining = type === "radio" && group !== "";
-  const left = Math.min(at.clientX + 8, window.innerWidth - 260);
-  const top = Math.min(at.clientY + 8, window.innerHeight - 170);
+  // A new choice always has a name ("Choice 3" unless you type one), so it's never "Unnamed choice".
+  const choiceCount = new Set(fields.filter((f) => f.type === "radio" && f.group_id).map((f) => f.group_id)).size;
+  const [choiceName, setChoiceName] = useState(`Choice ${choiceCount + 1}`);
+  // Keep the whole popover on screen: its height depends on the type (radio adds name and count fields).
+  const box = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(180);
+  useLayoutEffect(() => {
+    if (box.current) setHeight(box.current.offsetHeight);
+  });
+  const left = Math.max(8, Math.min(at.clientX + 8, window.innerWidth - 260));
+  const top = Math.max(8, Math.min(at.clientY + 8, window.innerHeight - height - 8));
   return (
-    <div data-testid="add-popover" className="fixed z-50 w-60 space-y-2 rounded border bg-white p-3 text-sm shadow-lg" style={{ left, top }}>
+    <div
+      ref={box}
+      data-testid="add-popover"
+      className="fixed z-50 max-h-[calc(100vh-16px)] w-60 space-y-2 overflow-y-auto rounded border bg-white p-3 text-sm shadow-lg"
+      style={{ left, top }}
+    >
       <div className="font-medium">New field on page {at.page}</div>
       <label className="block">
         Type
-        <select value={type} onChange={(e) => setType(e.target.value as FieldType)} className="mt-0.5 w-full rounded border px-1 py-1">
+        <select
+          value={type}
+          onChange={(e) => {
+            const t = e.target.value as FieldType;
+            setType(t);
+            setCount(t === "checkbox" ? 1 : 3); // a lone checkbox is common; a choice needs options
+          }}
+          className="mt-0.5 w-full rounded border px-1 py-1"
+        >
           {FIELD_TYPES.map((t) => (
             <option key={t} value={t}>
               {TYPE_LABEL[t]}
@@ -113,6 +149,33 @@ function AddFieldPopover({
           </select>
         </label>
       )}
+      {type === "radio" && !joining && (
+        <label className="block">
+          Choice name
+          <input
+            data-testid="add-choice-name"
+            value={choiceName}
+            onChange={(e) => setChoiceName(e.target.value)}
+            placeholder="e.g. Billing frequency"
+            className="mt-0.5 w-full rounded border px-1 py-1"
+          />
+        </label>
+      )}
+      {(type === "checkbox" || (type === "radio" && !joining)) && (
+        <label className="block">
+          How many {type === "radio" ? "options" : "checkboxes"}?
+          <input
+            data-testid="add-count"
+            type="number"
+            min={1}
+            max={20}
+            value={count}
+            onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+            className="mt-0.5 w-full rounded border px-1 py-1"
+          />
+          {count > 1 && <span className="text-xs text-gray-500">Placed in a row; resize the dashed frame to space them, or make it tall for a column.</span>}
+        </label>
+      )}
       <label className={`block ${joining ? "hidden" : ""}`}>
         Who it belongs to
         <select value={target} onChange={(e) => setTarget(e.target.value)} className="mt-0.5 w-full rounded border px-1 py-1">
@@ -128,7 +191,7 @@ function AddFieldPopover({
         <button className="rounded border px-2 py-1" onClick={onCancel}>
           Cancel
         </button>
-        <button className="rounded bg-blue-600 px-2 py-1 text-white" onClick={() => onAdd(type, target, type === "radio" ? group || newGroupId() : null)}>
+        <button className="rounded bg-blue-600 px-2 py-1 text-white" onClick={() => onAdd(type, target, type === "radio" ? group || null : null, type === "radio" || type === "checkbox" ? (joining ? 1 : count) : 1, choiceName.trim())}>
           Add field
         </button>
       </div>
@@ -179,38 +242,50 @@ export default function ReviewPage({ id }: { id: number }) {
   const inFlight = useRef<Promise<void> | null>(null);
   const [pending, setPending] = useState<PageClick | null>(null);
 
-  const createField = (type: FieldType, target: string, groupId: string | null) => {
-    if (!pending || !env) return;
+  /** "+ Add field": one field, or a group of radio options / checkboxes placed in a row at the click. Joining an
+   * existing radio choice adds one option with that choice's owner (one choice never has two owners). */
+  const createField = (type: FieldType, target: string, joinGroup: string | null, count: number, name: string) => {
+    if (!pending || !env || !draft) return;
     const page = env.pages.find((p) => p.n === pending.page)!;
-    const [w, h] = DEFAULT_SIZE[type];
-    const x0 = Math.max(0, Math.min(pending.point[0], page.width - w));
-    const y0 = Math.max(0, Math.min(pending.point[1] - h / 2, page.height - h)); // click = vertical middle
-    const id = newFieldId();
-    // Joining an existing choice: take its owner, so one choice never has two owners.
-    const owner = groupId ? draft?.fields.find((f) => f.type === "radio" && f.group_id === groupId) : undefined;
-    apply(
-      addField({
-        id,
-        signer_id: owner ? owner.signer_id : target || null,
-        filled_by: "signer",
-        type,
-        group_id: groupId,
-        label: "",
-        description: "",
-        page: page.n,
-        bbox: [x0, y0, x0 + w, y0 + h],
-        required: true,
-        candidate_id: null,
-        placement: "user",
-        confidence: null,
-        reason: "Added by you",
-        source: "user",
-        value: null,
-      }),
-    );
+    const owner = joinGroup ? draft.fields.find((f) => f.group_id === joinGroup) : undefined;
+    const base = {
+      signer_id: owner ? owner.signer_id : target || null,
+      filled_by: "signer" as const,
+      type,
+      label: "",
+      // A radio option carries its choice's name (an option joining a choice takes that choice's name).
+      description: type === "radio" ? (owner?.description ?? name) : "",
+      page: page.n,
+      required: true,
+      candidate_id: null,
+      placement: "user",
+      confidence: null,
+      reason: "Added by you",
+      source: "user" as const,
+      value: null,
+    };
+    let boxes: Field["bbox"][];
+    if (count > 1) boxes = layoutOptions(defaultFrame(pending.point, count, page), count);
+    else {
+      const [w, h] = DEFAULT_SIZE[type];
+      const x0 = Math.max(0, Math.min(pending.point[0], page.width - w));
+      const y0 = Math.max(0, Math.min(pending.point[1] - h / 2, page.height - h)); // click = vertical middle
+      boxes = [[x0, y0, x0 + w, y0 + h]];
+    }
+    const groupId = joinGroup ?? (type === "radio" || (type === "checkbox" && count > 1) ? newGroupId() : null);
+    const created = boxes.map((bbox) => ({ ...base, id: newFieldId(), bbox, group_id: groupId }));
+    apply((d) => {
+      let next = created.reduce((acc, f) => addField(f)(acc), d);
+      // A new option joining a group laid out as a frame: re-space the group inside its frame.
+      if (joinGroup) {
+        const before = d.fields.filter((f) => f.group_id === joinGroup);
+        if (isFramedGroup(before)) next = setGroupFrame(joinGroup, frameOf(before))(next);
+      }
+      return next;
+    });
     setPending(null);
     setAddMode(false);
-    setSelectedId(id);
+    setSelectedId(created[0].id);
   };
 
   const load = useCallback(() => {
@@ -330,6 +405,17 @@ export default function ReviewPage({ id }: { id: number }) {
     setActiveSignerId((cur) => (cur === signerId ? null : signerId));
   };
 
+  // Groups the sender laid out: one frame each (moved/resized as a whole), their markers drawn inside.
+  const frames: PreviewFrame[] = useMemo(() => {
+    if (!draft) return [];
+    const groups = new Map<string, Field[]>();
+    for (const f of draft.fields) if (f.group_id) groups.set(f.group_id, [...(groups.get(f.group_id) ?? []), f]);
+    return [...groups]
+      .filter(([, opts]) => isFramedGroup(opts) && opts.every((o) => o.page === opts[0].page))
+      .map(([gid, opts]) => ({ id: gid, page: opts[0].page, bbox: frameOf(opts), color: fieldColor(opts[0], draft.signers), selectId: opts[0].id }));
+  }, [draft]);
+  const framed = useMemo(() => new Set(draft?.fields.filter((f) => f.group_id && frames.some((fr) => fr.id === f.group_id)).map((f) => f.id)), [draft, frames]);
+
   const boxes: PreviewBox[] = useMemo(() => {
     if (!draft) return [];
     return draft.fields.map((f) => ({
@@ -342,8 +428,9 @@ export default function ReviewPage({ id }: { id: number }) {
       title: `${f.label || TYPE_LABEL[f.type]}${f.reason ? `: ${f.reason}` : ""}`,
       pulse: f.id === pulseId,
       content: previewContent(f),
+      inFrame: framed.has(f.id),
     }));
-  }, [draft, pulseId]);
+  }, [draft, pulseId, framed]);
 
   const highlighted = useMemo(() => {
     const ids = new Set<string>();
@@ -489,6 +576,8 @@ export default function ReviewPage({ id }: { id: number }) {
                 highlighted={highlighted}
                 onBoxClick={selectBox}
                 onBoxChange={(fid, bbox) => apply(moveFieldBox(fid, bbox))}
+                frames={frames}
+                onFrameChange={(gid, bbox) => apply(setGroupFrame(gid, bbox))}
                 addMode={addMode}
                 onPageClick={setPending}
               />

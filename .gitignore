@@ -39,3 +39,6 @@ backend/test_pdfs/*.labels.json
 
 # Everything under test_pdfs (incl. subfolders and zips) stays local
 backend/test_pdfs/
+
+# One-page README for the submission email (kept out of the repo)
+/SUBMISSION_README.md

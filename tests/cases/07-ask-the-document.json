@@ -1,0 +1,45 @@
+{
+  "area": "Ask questions about the document",
+  "cases": [
+    {
+      "id": "ASK-01",
+      "title": "Sender asks who needs to sign",
+      "covers": ["R-ASK"],
+      "priority": "medium",
+      "preconditions": ["AI-01 done"],
+      "steps": [
+        "Expand \"AI summary & questions\" if minimised",
+        "Click the suggestion \"Who needs to sign?\"",
+        "Click a page reference such as \"(p. 3)\" in the answer"
+      ],
+      "expected": [
+        "\"Thinking…\" shows, then an answer naming the parties, with page references",
+        "Clicking the page reference scrolls the preview to that page"
+      ]
+    },
+    {
+      "id": "ASK-02",
+      "title": "Signer asks about their obligations",
+      "covers": ["R-ASK"],
+      "priority": "medium",
+      "preconditions": ["SIGN-01 done (signing page open)"],
+      "steps": [
+        "Click \"Questions about this document?\"",
+        "Type \"How long do my obligations last?\" into the question box and press Enter"
+      ],
+      "expected": [
+        "The answer quotes the document's term with a page reference",
+        "The panel says answers come from the document only and are not legal advice"
+      ]
+    },
+    {
+      "id": "ASK-03",
+      "title": "Off-topic question is declined",
+      "covers": ["R-ASK", "R-AI-HONEST"],
+      "priority": "low",
+      "preconditions": ["ASK-01 or ASK-02 panel open"],
+      "steps": ["Type \"What's the weather in Paris?\" and send it"],
+      "expected": ["The answer politely says it can only answer from this document"]
+    }
+  ]
+}

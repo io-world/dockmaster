@@ -35,6 +35,9 @@ Dates are 2026-10-01 to 2026-10-02.
 - **Project-local tooling.** No system-wide installs (Tesseract, Node), so Node lives in `.venv` via nodeenv.
 - **Privacy.** Personal test PDFs, labels and the brief stay out of the public repo, and the commit author was scrubbed.
 - Kept Sonnet over Haiku after the measured comparison.
+- **Day 4 product calls:** no sender role (every field belongs to a participant, with optional *locked* pre-fill);
+  signatures typed in a pre-filled dialog because boxes are too small; radio/checkbox groups placed in one go and
+  re-spaced by resizing a frame; named choices; self-hosting instead of a cloud host, and Docker removed.
 
 ## What the AI got wrong (and how it was caught)
 | Mistake | Caught by | Fix |
@@ -51,8 +54,13 @@ Dates are 2026-10-01 to 2026-10-02.
 | Restored cards said "AI: Restored by you" | Screenshot | "AI:" prefix only on the AI's own reasons |
 | First public commit: author line showed first name and Mac hostname; DECISIONS named the personal document types | Human privacy request, then an AI audit of the GitHub clone | Text scrubbed, noreply author, history rewritten (old SHA still reachable: see CLAUDE.md status) |
 | Several failures in its own Playwright tests (selectors, stale coordinates) were at first suspected to be product bugs | AI debugging | Test fixes; no product change |
+| Preview showed a deleted document's pages (SQLite reuses ids; page images had no cache headers) | Human, after deleting and re-uploading | `?v=` per upload plus `Cache-Control: no-cache` |
+| Typing a signature straight into the box: initials boxes had no room (the "Draw" label filled them) | Human | Type-first dialog, pre-filled with the name; image scaled to fit |
+| New popover inputs pushed the "Add field" button below the screen | Playwright test | Popover measures itself and stays on screen |
+| A scripted edit removed more code than intended (two components) | TypeScript build | Restored from the last commit |
+| Proposed a cloud host and Docker when the owner already self-hosts | Human | Railway dropped, Docker removed |
 
 ## Cost of building with AI
-- **Product AI calls during development:** 27 logged calls, $1.26 in total, in `backend/out/llm_calls.jsonl`
-  (gitignored). A few more ran inside Docker test containers and aren't in that log; roughly 6 calls, about $0.25.
+- **Product AI calls during development:** 97 logged calls, $4.10 in total (as of 2026-10-04), in
+  `backend/out/llm_calls.jsonl` (gitignored). A few more ran inside Docker test containers and aren't in that log; roughly 6 calls, about $0.25.
 - **Claude Code usage:** not tracked here.

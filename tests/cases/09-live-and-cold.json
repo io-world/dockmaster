@@ -1,0 +1,60 @@
+{
+  "area": "Live site and the cold run (before submitting)",
+  "cases": [
+    {
+      "id": "LIVE-01",
+      "title": "Production mode on the public address",
+      "covers": ["R-LIVE"],
+      "priority": "high",
+      "preconditions": [
+        "On the host: git pull, then cd frontend && uv run npm run build",
+        "Backend started WITHOUT --reload: uv run uvicorn app.api:app --app-dir backend --host 0.0.0.0 --port 8000",
+        "Router forwards port 80 to this machine's port 8000"
+      ],
+      "steps": [
+        "On a phone using mobile data (not home Wi-Fi), open the public address",
+        "Run ACC-01 there"
+      ],
+      "expected": ["The sign-in page loads from outside the home network", "Sign-up works"]
+    },
+    {
+      "id": "LIVE-02",
+      "title": "Data survives a restart",
+      "covers": ["R-LIVE"],
+      "priority": "high",
+      "preconditions": ["LIVE-01 done", "At least one document uploaded on the live site"],
+      "steps": ["Stop the backend (Ctrl+C) and start it again with the same command", "Reload the Inbox"],
+      "expected": ["The account still signs in and the document is still listed"]
+    },
+    {
+      "id": "LIVE-03",
+      "title": "Full journey on the live site",
+      "covers": ["R-LIVE", "R-COLD", "R-COMPLETE"],
+      "priority": "high",
+      "preconditions": ["LIVE-01 done"],
+      "steps": [
+        "Run AI-01, REV-01, REV-03, SEND-04, SIGN-02, SIGN-04 and SIGN-08 against the public address",
+        "Or run the automated check: PLAYWRIGHT_BROWSERS_PATH=.venv/playwright-browsers uv run python backend/scripts/e2e_journey.py <public address> <nda pdf> <output folder>"
+      ],
+      "expected": ["Every step passes", "The downloaded signed PDF is correct"],
+      "notes": "The automated check creates the account tester@example.test; delete its test document from the Inbox afterwards if you want a clean live site."
+    },
+    {
+      "id": "COLD-01",
+      "title": "Someone else uses it cold",
+      "covers": ["R-COLD", "R-AI-PROPOSAL"],
+      "priority": "high",
+      "preconditions": ["LIVE-01 done", "A person who has never seen DockMaster", "They bring 2–3 PDFs we have never seen"],
+      "steps": [
+        "Give them only the public address",
+        "Ask them to sign up, upload one of their PDFs, send it to themselves and one other address they control, and sign both parts",
+        "Say nothing while they work; note every hesitation, wrong click or question"
+      ],
+      "expected": [
+        "They finish upload, review, send, sign and download without help",
+        "Every AI mistake they hit was either in Needs review or quick to fix",
+        "Each problem found is fixed or logged in DECISIONS.md before submitting"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "area": "Upload and the AI proposal",
+  "cases": [
+    {
+      "id": "AI-01",
+      "title": "Upload a two-party NDA and get a full proposal",
+      "covers": ["R-UPLOAD", "R-AI-PROPOSAL", "R-COST"],
+      "priority": "high",
+      "preconditions": ["Signed in as the sender", "Document nda_two_party is on your computer"],
+      "steps": [
+        "Go to the Inbox",
+        "Click \"Upload new PDF\" and choose nda_two_party",
+        "Watch the progress text while it works",
+        "Wait for the Review screen to open"
+      ],
+      "expected": [
+        "Progress text changes from \"Uploading…\" to \"Reading the document and finding blanks…\" to \"Finding signers and fields with AI…\"",
+        "Review opens within about 60 seconds, with the file name and document type at the top",
+        "The drop bar shows \"Needs review\", one chip per signer (two here) and \"Not a field\"",
+        "Each signer's section holds that party's signature, name, title and date fields",
+        "Boxes on the page preview sit on the document's blank lines",
+        "A new line was added to backend/out/llm_calls.jsonl with tokens and cost"
+      ],
+      "notes": "The AI can vary slightly between runs; judge the proposal, not exact counts."
+    },
+    {
+      "id": "AI-02",
+      "title": "Signature blocks stay together",
+      "covers": ["R-AI-PROPOSAL"],
+      "priority": "high",
+      "preconditions": ["AI-01 done"],
+      "steps": [
+        "Click a signer's section title (e.g. \"Signer for …\") to highlight all of their boxes",
+        "Check the highlighted boxes on the page preview"
+      ],
+      "expected": [
+        "Only one party's block is highlighted: its signature, printed name, title and date",
+        "No field from the other party's block is highlighted"
+      ]
+    },
+    {
+      "id": "AI-03",
+      "title": "The AI explains what it rejected",
+      "covers": ["R-AI-PROPOSAL", "R-AI-HONEST"],
+      "priority": "medium",
+      "preconditions": ["AI-01 done"],
+      "steps": [
+        "Click the \"Not a field\" chip in the drop bar",
+        "Read each card in the \"Not a field\" section"
+      ],
+      "expected": [
+        "Each card shows a reason (e.g. table border, underlined heading)",
+        "If the section is empty, that's fine: it says \"Nothing here.\""
+      ]
+    },
+    {
+      "id": "AI-04",
+      "title": "Radio choices, checkbox and preamble blanks are understood",
+      "covers": ["R-AI-PROPOSAL", "R-TYPES"],
+      "priority": "high",
+      "preconditions": ["Signed in", "Document services_choices is on your computer"],
+      "steps": [
+        "Go to the Inbox",
+        "Click \"Upload new PDF\" and choose services_choices",
+        "Wait for Review to open",
+        "Find a card whose type is \"Radio option\""
+      ],
+      "expected": [
+        "Each round option is its own \"Radio option\" card showing \"Option N of M\"",
+        "All options of one question belong to the same person",
+        "The tick box is a \"Checkbox\" card",
+        "Blanks about the agreement itself (e.g. fee, effective date) are in \"Needs review\" or with a likely signer, each with a reason"
+      ]
+    },
+    {
+      "id": "AI-05",
+      "title": "Scanned document",
+      "covers": ["R-AI-PROPOSAL", "R-AI-HONEST"],
+      "priority": "medium",
+      "preconditions": ["Signed in", "Document scanned is on your computer"],
+      "steps": [
+        "Click \"Upload new PDF\" and choose the scanned document",
+        "Wait for Review to open",
+        "Expand \"AI summary & questions\" if it is minimised"
+      ],
+      "expected": [
+        "Fields are proposed on the scanned page's lines",
+        "The AI summary notes that the page is scanned and read from the image",
+        "Anything uncertain is in \"Needs review\" with a reason"
+      ]
+    },
+    {
+      "id": "AI-06",
+      "title": "Document with existing form fields",
+      "covers": ["R-AI-PROPOSAL"],
+      "priority": "medium",
+      "preconditions": ["Signed in", "Document form_fields is on your computer"],
+      "steps": ["Click \"Upload new PDF\" and choose form_fields", "Wait for Review to open"],
+      "expected": [
+        "The PDF's own form fields become boxes in exactly the same place",
+        "Its radio buttons are grouped into choices; its checkboxes are checkboxes"
+      ]
+    },
+    {
+      "id": "AI-07",
+      "title": "Document with no blanks",
+      "covers": ["R-AI-HONEST"],
+      "priority": "low",
+      "preconditions": ["Signed in", "Document no_blanks is on your computer"],
+      "steps": ["Click \"Upload new PDF\" and choose no_blanks", "Wait for Review to open", "Read the AI summary"],
+      "expected": [
+        "No fields are invented",
+        "The AI summary says no blanks were found and fields need to be added by hand",
+        "\"+ Add field\" still works"
+      ]
+    }
+  ]
+}
